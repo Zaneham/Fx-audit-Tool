@@ -193,7 +193,8 @@ if run:
         df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce", dayfirst=True)
         bad_rows = df["Timestamp"].isna().sum()
         if bad_rows > 0:
-            st.warning(f"{bad_rows} rows had unrecognized dates and were dropped.")
+            st.warning(f"{bad_rows} rows were skipped due to unrecognized dates. Ensure your dates use YYYY-MM-DD.")
+
             df = df.dropna(subset=["Timestamp"])
 
     # Parse actual rate or infer pair
