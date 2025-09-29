@@ -108,9 +108,6 @@ def _cached_fetch_rate(base: str, quote: str, use_yesterday_flag: bool):
     q = (quote or "").upper().strip()
     return fetch_actual_rate(b, q, as_of_yesterday=use_yesterday_flag)
 
-# --- PDF Report Builder ---
-
-
 def build_pdf_report(base, quote, actual_rate, summary, audited):
     pdf = FPDF()
     pdf.add_page()
@@ -130,12 +127,23 @@ def build_pdf_report(base, quote, actual_rate, summary, audited):
     pdf.set_font("Arial", "B", 14)
     pdf.cell(200, 10, "Executive Summary", ln=True)
     pdf.set_font("Arial", "", 12)
-    pdf.multi_cell(0, 10, f"""
+
+    # Build the executive summary text
+    exec_summary = f"""
 Prediction Accuracy: {summary.get('prediction_accuracy')}
 RMSE: {summary.get('rmse')}
 Recall %: {summary.get('recall_perc')}
 Coverage: {summary.get('percent_profiled')}
-""")
+
+Key Finding:
+{summary.get('key_finding', 'No key finding generated.')}
+"""
+
+    # Use multi_cell so long text wraps nicely
+    pdf.multi_cell(0, 10, exec_summary)
+
+    return pdf
+
 
     # --- Insert chart: Predicted vs Live ---
     if "Predicted_Rate" in audited.columns and "Live_Rate" in audited.columns:
