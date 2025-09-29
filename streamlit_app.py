@@ -6,7 +6,7 @@ Streamlit front-end for Hedge Audit Demo
 
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 import io
 
 # Ensure repository root (folder containing this file) is on sys.path
@@ -70,6 +70,10 @@ def _cached_fetch_rate(base: str, quote: str, use_yesterday_flag: bool):
     return fetch_actual_rate(base, quote, as_of_yesterday=use_yesterday_flag)
 
 if run:
+    audit_success = False
+    summary = None
+    audited = None
+
     # Determine DataFrame source
     if "_sample_df" in st.session_state and st.session_state.get("_sample_df") is not None and uploaded is None:
         df = st.session_state["_sample_df"]
@@ -116,38 +120,24 @@ if run:
 
             audited = evaluate_dataframe(df, actual_rate=actual_rate, fill_missing_only=True)
             summary = compute_summary(audited, by_pair=True)
+            audit_success = True
     except RuntimeError:
-        # message already shown via _display_error
-        pass
+        audit_success = False
     except Exception as e:
         st.error(f"Unexpected error during audit: {e}")
+        audit_success = False
         raise
 
-    st.success("Audit complete")
-    st.markdown("### Summary")
-    st.json(summary)
+    if audit_success:
+        st.success("Audit complete")
+        st.markdown("### Summary")
+        st.json(summary)
 
-    st.markdown("### Preview")
-    st.dataframe(audited.head(show_preview_rows))
+        st.markdown("### Preview")
+        st.dataframe(audited.head(show_preview_rows))
 
-    csv_bytes = audited.to_csv(index=False).encode("utf-8")
-    st.download_button("Download audited CSV", data=csv_bytes, file_name="audited.csv", mime="text/csv")
+        csv_bytes = audited.to_csv(index=False).encode("utf-8")
+        st.download_button("Download audited CSV", data=csv_bytes, file_name="audited.csv", mime="text/csv")
 
-    st.markdown("---")
-    st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · Generated: {datetime.utcnow().isoformat()}Z")
-
-    # Only show results if audit succeeded
-if "summary" in locals() and "audited" in locals():
-    st.success("Audit complete")
-    st.markdown("### Summary")
-    st.json(summary)
-
-    st.markdown("### Preview")
-    st.dataframe(audited.head(show_preview_rows))
-
-    csv_bytes = audited.to_csv(index=False).encode("utf-8")
-    st.download_button("Download audited CSV", data=csv_bytes, file_name="audited.csv", mime="text/csv")
-
-    st.markdown("---")
-    st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · Generated: {datetime.utcnow().isoformat()}Z")
-
+        st.markdown("---")
+        st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · Generated: {datetime.utcnow().isoformat()}Z")
