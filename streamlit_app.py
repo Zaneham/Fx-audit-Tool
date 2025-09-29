@@ -285,19 +285,60 @@ if run:
         st.table(pd.DataFrame(metrics_table))
 
         # --- Visuals ---
+       
         st.markdown("### 📈 Visuals")
 
-        if "Predicted_Rate" in audited.columns and "Live_Rate" in audited.columns:
+        import altair as alt
+
+        # Line chart: Predicted vs Live Rates
+        if {"Predicted_Rate", "Live_Rate"}.issubset(audited.columns):
             audited = audited.copy()
             audited["Day"] = range(1, len(audited) + 1)
-            chart_df = audited.set_index("Day")[["Predicted_Rate", "Live_Rate"]]
-            st.line_chart(chart_df)
 
+            line_chart = (
+                alt.Chart(audited)
+                .mark_line(point=True)
+                .encode(
+                    x=alt.X("Day:O", title="Day"),
+                    y=alt.Y("value:Q", title="Rate"),
+                    color=alt.Color("variable:N", title="Series")
+                )
+                .transform_fold(
+                    ["Predicted_Rate", "Live_Rate"],
+                    as_=["variable", "value"]
+                )
+                .properties(width=600, height=300, title="Predicted vs Live Rates")
+            )
+            st.altair_chart(line_chart, use_container_width=True)
+
+        # Bar chart: CorrectDecision counts
         if "CorrectDecision" in audited.columns:
-            st.bar_chart(audited["CorrectDecision"].value_counts())
+            correct_chart = (
+                alt.Chart(audited)
+                .mark_bar()
+                .encode(
+                    x=alt.X("CorrectDecision:N", title="Decision Correct?"),
+                    y=alt.Y("count()", title="Count"),
+                    color=alt.Color("CorrectDecision:N", legend=None)
+                )
+                .properties(width=400, height=300, title="Correct Decisions")
+            )
+            st.altair_chart(correct_chart, use_container_width=True)
 
+        # Bar chart: HelpfulOutcome counts
         if "HelpfulOutcome" in audited.columns:
-            st.bar_chart(audited["HelpfulOutcome"].value_counts())
+            outcome_chart = (
+                alt.Chart(audited)
+                .mark_bar()
+                .encode(
+                    x=alt.X("HelpfulOutcome:N", title="Outcome Helpful?"),
+                    y=alt.Y("count()", title="Count"),
+                    color=alt.Color("HelpfulOutcome:N", legend=None)
+                )
+                .properties(width=400, height=300, title="Helpful Outcomes")
+            )
+            st.altair_chart(outcome_chart, use_container_width=True)
+
 
 
 
