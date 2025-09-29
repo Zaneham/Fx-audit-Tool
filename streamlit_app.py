@@ -70,11 +70,8 @@ def _display_error(msg: str):
 
 @st.cache_data(ttl=60 * 60)
 def _cached_fetch_rate(base: str, quote: str, use_yesterday_flag: bool):
-    # Defensive: ensure base/quote are strings
     b = (base or "").upper().strip()
     q = (quote or "").upper().strip()
-    print(f"[DEBUG] _cached_fetch_rate called with Base: {b}, Quote: {q}, as_of_yesterday: {use_yesterday_flag}")
-    # fetch_actual_rate will print its own debug including API key state and response
     return fetch_actual_rate(b, q, as_of_yesterday=use_yesterday_flag)
 
 # Main audit logic
@@ -91,7 +88,6 @@ if run:
         filename = "sample.csv"
     elif uploaded is not None:
         try:
-            # read uploaded file safely
             uploaded.seek(0)
             df = pd.read_csv(io.BytesIO(uploaded.read()))
             filename = getattr(uploaded, "name", "uploaded.csv") or "uploaded.csv"
@@ -108,13 +104,11 @@ if run:
     # Parse actual rate or infer pair
     actual_rate = _parse_actual(actual_input)
 
-    # Ensure base/quote local variables exist and are normalized if provided
     base = (base or "").upper().strip()
     quote = (quote or "").upper().strip()
 
     if actual_rate is None:
         if base and quote:
-            # base and quote already normalized above
             pass
         elif infer_pair:
             try:
@@ -127,15 +121,11 @@ if run:
         else:
             _display_error("No actual rate provided and base/quote currencies are missing.")
 
-        # Final defensive check before fetching
         if not base or not quote:
             _display_error("Base or quote currency is empty after inference; cannot fetch rate.")
 
-        print(f"[DEBUG] Final base/quote before fetch: {base}/{quote}")
-
         actual_rate = _cached_fetch_rate(base, quote, use_yesterday)
         if actual_rate is None:
-            # small built-in fallback for demo
             fallback_rate = 0.6123 if (base, quote) == ("NZD", "USD") else None
             if fallback_rate is not None:
                 st.warning(f"Using fallback rate for {base}/{quote}: {fallback_rate}")
@@ -150,7 +140,6 @@ if run:
             summary = compute_summary(audited, by_pair=True)
             audit_success = True
     except Exception as e:
-        # show error and re-raise so logs capture full traceback
         st.error(f"Unexpected error during audit: {e}")
         audit_success = False
         raise
@@ -168,13 +157,6 @@ if run:
         st.download_button("Download audited CSV", data=csv_bytes, file_name="audited.csv", mime="text/csv")
 
         st.markdown("---")
-        st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · Generated: {datetime.now(timezone.utc).isoformat()}Z")
-
-        # Debug panel for quick inspection in the UI
-        with st.expander("Debug logs"):
-            st.text(f"Base: {base}")
-            st.text(f"Quote: {quote}")
-            st.text(f"Actual rate used: {actual_rate}")
-            # show whether API key present (do not show the key itself)
-            api_key_present = bool(os.getenv("FX_API_KEY"))
-            st.text(f"FX_API_KEY present in env: {api_key_present}")
+        st.caption(
+            f"Rate used: {actual_rate} · Rows: {len(audited)} · Generated: {datetime.now(timezone.utc).isoformat()}Z"
+        )
