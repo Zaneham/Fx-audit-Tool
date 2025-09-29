@@ -1,10 +1,9 @@
 pandas
-numpy 
-fastapi 
-uvicorn[standard] 
+
+numpy
+
+streamlit
+
 requests
+
 python-dotenv
-pytest 
-requests-mock 
-shelve32; 
-python_version
