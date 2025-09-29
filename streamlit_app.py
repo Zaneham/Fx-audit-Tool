@@ -316,15 +316,70 @@ if run:
 
         st.markdown("---")
 
-        # --- Executive Summary ---
+        # --- Executive Summary ## This is also a statement generator
         st.markdown("### 📝 Executive Summary")
+
+        # Pull metrics safely
+        acc = summary.get("prediction_accuracy")
+        rmse = summary.get("rmse")
+        recall = summary.get("recall_perc")
+        coverage = summary.get("percent_profiled")
+
+        # Generate a dynamic key finding
+        insights = []
+
+        # Accuracy-driven insights
+        if acc is not None:
+            if acc >= 0.9:
+                insights.append("The model achieved very high accuracy, closely tracking market moves.")
+            elif acc >= 0.75:
+                insights.append("The model captured most market moves, though some deviations remain.")
+            else:
+                insights.append("The model struggled to consistently align with market moves.")
+
+        # RMSE-driven insights
+        if rmse is not None:
+            if rmse < 0.02:
+                insights.append("Prediction errors were minimal, indicating strong rate stability.")
+            elif rmse < 0.05:
+                insights.append("Prediction errors were moderate, suggesting room for refinement.")
+            else:
+                insights.append("Prediction errors were relatively large, pointing to instability.")
+
+        # Recall-driven insights
+        if recall is not None:
+            if recall >= 0.8:
+                insights.append("The model successfully identified most of the key opportunities.")
+            elif recall >= 0.5:
+                insights.append("The model caught some opportunities but missed others.")
+            else:
+                insights.append("The model missed many opportunities, limiting practical usefulness.")
+
+        # Coverage-driven insights
+        if coverage is not None:
+            if coverage >= 0.9:
+                insights.append("Coverage was broad, ensuring decisions were made across nearly all cases.")
+            elif coverage >= 0.7:
+                insights.append("Coverage was reasonable, though some cases were skipped.")
+            else:
+                insights.append("Coverage was limited, reducing the model’s applicability.")
+
+        # Fallback if no metrics available
+        if not insights:
+            insights.append("Insufficient data to generate a clear finding.")
+
+        # Join into a narrative
+        key_finding = " ".join(insights)
+
+        # Display summary
         st.write({
-            "Prediction Accuracy": summary.get("prediction_accuracy"),
-            "RMSE": summary.get("rmse"),
-            "Recall %": summary.get("recall_perc"),
-            "Coverage": summary.get("percent_profiled"),
-            "Key Finding": "Model decisions aligned with actual market moves in most cases."
+            "Prediction Accuracy": acc,
+            "RMSE": rmse,
+            "Recall %": recall,
+            "Coverage": coverage,
+            "Key Finding": key_finding
         })
+
       
            # --- Key Metrics Table ---
         st.markdown("### 📊 Key Metrics")
