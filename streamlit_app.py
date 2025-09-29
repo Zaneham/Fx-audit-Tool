@@ -288,12 +288,10 @@ if run:
         st.table(pd.DataFrame(metrics_table))
 
         # --- Visuals ---
-       
         st.markdown("### 📈 Visuals")
 
         import altair as alt
 
-        # Line chart: Predicted vs Live Rates
         if {"Predicted_Rate", "Live_Rate"}.issubset(audited.columns):
             audited = audited.copy()
             audited["Day"] = range(1, len(audited) + 1)
@@ -303,7 +301,12 @@ if run:
                 .mark_line(point=True)
                 .encode(
                     x=alt.X("Day:O", title="Day"),
-                    y=alt.Y("value:Q", title="Rate"),
+                    y=alt.Y(
+                        "value:Q",
+                        title="Rate",
+                        axis=alt.Axis(format=".3f"),
+                        scale=alt.Scale(domain=[0.61, 0.64])
+                    ),
                     color=alt.Color("variable:N", title="Series")
                 )
                 .transform_fold(
@@ -313,6 +316,8 @@ if run:
                 .properties(width=600, height=300, title="Predicted vs Live Rates")
             )
             st.altair_chart(line_chart, use_container_width=True)
+
+
 
         # Bar chart: CorrectDecision counts
         if "CorrectDecision" in audited.columns:
