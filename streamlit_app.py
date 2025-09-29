@@ -425,6 +425,8 @@ if run:
                 )
                 .properties(width=600, height=300, title="Predicted vs Live Rates")
             )
+            st.altair_chart(line_chart, use_container_width=True)
+            st.caption("🔹 Predicted vs Live Rates — shows how closely the model tracks actual NZD/AUD market moves.")
 
             # Difference chart
             audited["Diff"] = audited["Live_Rate"] - audited["Predicted_Rate"]
@@ -437,50 +439,16 @@ if run:
                 )
                 .properties(width=600, height=300, title="Prediction Error Over Time")
             )
-
-            # Tabs for neat layout
-            tab1, tab2 = st.tabs(["📊 Rates Comparison", "📉 Error Trend"])
-            with tab1:
-                st.altair_chart(line_chart, use_container_width=True)
-            with tab2:
-                st.altair_chart(diff_chart, use_container_width=True)
+            st.altair_chart(diff_chart, use_container_width=True)
+            st.caption("🔹 Prediction Error — highlights the size and direction of differences between predicted and live rates.")
 
         if "CorrectDecision" in audited.columns:
             st.bar_chart(audited["CorrectDecision"].value_counts())
+            st.caption("🔹 Correct Decisions — shows how often the model’s directional calls were right vs wrong.")
 
         if "HelpfulOutcome" in audited.columns:
             st.bar_chart(audited["HelpfulOutcome"].value_counts())
-
-
-
-
-        # Bar chart: CorrectDecision counts
-        if "CorrectDecision" in audited.columns:
-            correct_chart = (
-                alt.Chart(audited)
-                .mark_bar()
-                .encode(
-                    x=alt.X("CorrectDecision:N", title="Decision Correct?"),
-                    y=alt.Y("count()", title="Count"),
-                    color=alt.Color("CorrectDecision:N", legend=None)
-                )
-                .properties(width=400, height=300, title="Correct Decisions")
-            )
-            st.altair_chart(correct_chart, use_container_width=True)
-
-        # Bar chart: HelpfulOutcome counts
-        if "HelpfulOutcome" in audited.columns:
-            outcome_chart = (
-                alt.Chart(audited)
-                .mark_bar()
-                .encode(
-                    x=alt.X("HelpfulOutcome:N", title="Outcome Helpful?"),
-                    y=alt.Y("count()", title="Count"),
-                    color=alt.Color("HelpfulOutcome:N", legend=None)
-                )
-                .properties(width=400, height=300, title="Helpful Outcomes")
-            )
-            st.altair_chart(outcome_chart, use_container_width=True)
+            st.caption("🔹 Helpful Outcomes — shows how often correct decisions were also practically useful.")
 
 
 
