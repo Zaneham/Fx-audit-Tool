@@ -296,6 +296,11 @@ if run:
             audited = audited.copy()
             audited["Day"] = range(1, len(audited) + 1)
 
+            # Calculate min/max for dynamic y-axis zoom
+            y_min = audited[["Predicted_Rate", "Live_Rate"]].min().min()
+            y_max = audited[["Predicted_Rate", "Live_Rate"]].max().max()
+
+            # Comparison chart
             line_chart = (
                 alt.Chart(audited)
                 .mark_line(point=True)
@@ -305,7 +310,7 @@ if run:
                         "value:Q",
                         title="Rate",
                         axis=alt.Axis(format=".3f"),
-                        scale=alt.Scale(domain=[0.61, 0.64])
+                        scale=alt.Scale(domain=[y_min - 0.002, y_max + 0.002])
                     ),
                     color=alt.Color("variable:N", title="Series")
                 )
@@ -315,7 +320,32 @@ if run:
                 )
                 .properties(width=600, height=300, title="Predicted vs Live Rates")
             )
-            st.altair_chart(line_chart, use_container_width=True)
+
+            # Difference chart
+            audited["Diff"] = audited["Live_Rate"] - audited["Predicted_Rate"]
+            diff_chart = (
+                alt.Chart(audited)
+                .mark_line(point=True, color="red")
+                .encode(
+                    x=alt.X("Day:O", title="Day"),
+                    y=alt.Y("Diff:Q", title="Live - Predicted", axis=alt.Axis(format=".3f"))
+                )
+                .properties(width=600, height=300, title="Prediction Error Over Time")
+            )
+
+            # Tabs for neat layout
+            tab1, tab2 = st.tabs(["📊 Rates Comparison", "📉 Error Trend"])
+            with tab1:
+                st.altair_chart(line_chart, use_container_width=True)
+            with tab2:
+                st.altair_chart(diff_chart, use_container_width=True)
+
+        if "CorrectDecision" in audited.columns:
+            st.bar_chart(audited["CorrectDecision"].value_counts())
+
+        if "HelpfulOutcome" in audited.columns:
+            st.bar_chart(audited["HelpfulOutcome"].value_counts())
+
 
 
 
