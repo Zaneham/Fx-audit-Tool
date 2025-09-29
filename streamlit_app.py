@@ -186,28 +186,29 @@ if run:
     if not ok:
         _display_error(f"CSV missing required columns: {', '.join(missing)}")
 
-       # Normalize Timestamp column automatically
- if "Timestamp" in df.columns:
-    # Strip whitespace and enforce string type first
-    df["Timestamp"] = df["Timestamp"].astype(str).str.strip()
+    # Normalize Timestamp column automatically
+    if "Timestamp" in df.columns:
+        # Strip whitespace and enforce string type first
+        df["Timestamp"] = df["Timestamp"].astype(str).str.strip()
 
-    # Try parsing with a strict ISO format first
-    parsed = pd.to_datetime(df["Timestamp"], format="%Y-%m-%d", errors="coerce")
+        # Try parsing with a strict ISO format first
+        parsed = pd.to_datetime(df["Timestamp"], format="%Y-%m-%d", errors="coerce")
 
-    # Fallback: if strict parsing fails, try a more flexible parse
-    if parsed.isna().any():
-        parsed = pd.to_datetime(df["Timestamp"], errors="coerce", dayfirst=False)
+        # Fallback: if strict parsing fails, try a more flexible parse
+        if parsed.isna().any():
+            parsed = pd.to_datetime(df["Timestamp"], errors="coerce", dayfirst=False)
 
-    df["Timestamp"] = parsed
+        df["Timestamp"] = parsed
 
-    # Count bad rows
-    bad_rows = df["Timestamp"].isna().sum()
-    if bad_rows > 0:
-        st.warning(f"{bad_rows} rows had invalid or unrecognized dates and were excluded.")
-        df = df.dropna(subset=["Timestamp"])
+        # Count bad rows
+        bad_rows = df["Timestamp"].isna().sum()
+        if bad_rows > 0:
+            st.warning(f"{bad_rows} rows had invalid or unrecognized dates and were excluded.")
+            df = df.dropna(subset=["Timestamp"])
 
     # Parse actual rate or infer pair
     actual_rate = _parse_actual(actual_input)
+
 
     base = (base or "").upper().strip()
     quote = (quote or "").upper().strip()
