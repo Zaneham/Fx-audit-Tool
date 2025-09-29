@@ -128,18 +128,6 @@ def build_pdf_report(base, quote, actual_rate, summary, audited):
     pdf.cell(200, 10, "Executive Summary", ln=True)
     pdf.set_font("Arial", "", 12)
 
-pdf = build_pdf_report(base, quote, actual_rate, summary, audited)
-
-# Export to bytes
-pdf_bytes = pdf.output(dest="S").encode("latin-1")
-
-# Now pass to Streamlit
-st.download_button(
-    "Download PDF Report",
-    data=pdf_bytes,
-    file_name="hedge_audit_report.pdf",
-    mime="application/pdf"
-)
 
 
     # Build the executive summary text
