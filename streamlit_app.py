@@ -187,7 +187,7 @@ if run:
         _display_error(f"CSV missing required columns: {', '.join(missing)}")
 
        # Normalize Timestamp column automatically
-    if "Timestamp" in df.columns:
+ if "Timestamp" in df.columns:
     # Strip whitespace and enforce string type first
     df["Timestamp"] = df["Timestamp"].astype(str).str.strip()
 
