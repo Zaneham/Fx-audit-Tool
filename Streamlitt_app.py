@@ -9,11 +9,16 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import datetime, timedelta
-
+import os
+import sys
 from audit.evaluator import evaluate_dataframe
 from audit.summary import compute_summary
 from validators import infer_pair_from_df_or_filename
 from ingest.rate_fetcher import fetch_actual_rate
+
+ROOT = os.path.abspath(os.path.dirname(__file__))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 st.set_page_config(page_title="Hedge Audit Demo", layout="wide")
 
