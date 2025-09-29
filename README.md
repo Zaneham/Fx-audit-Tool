@@ -70,7 +70,7 @@ Timestamp,Predicted_Rate,Live_Rate,Decision,Pair
 ```
 
 
-##
+## CSV features
 Timestamp: ISO format preferred (YYYY-MM-DD), but flexible parsing supported
 
 Predicted_Rate: Model’s forecasted rate
