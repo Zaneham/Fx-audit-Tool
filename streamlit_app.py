@@ -128,7 +128,7 @@ if run:
         audit_success = False
         raise
 
-    if audit_success:
+        if audit_success:
         st.success("Audit complete")
         st.markdown("### Summary")
         st.json(summary)
@@ -141,3 +141,4 @@ if run:
 
         st.markdown("---")
         st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · Generated: {datetime.utcnow().isoformat()}Z")
+
