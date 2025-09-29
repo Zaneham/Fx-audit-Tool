@@ -291,13 +291,14 @@ if run:
             audited = audited.copy()
             audited["Day"] = range(1, len(audited) + 1)
             chart_df = audited.set_index("Day")[["Predicted_Rate", "Live_Rate"]]
-        st.line_chart(chart_df)
+            st.line_chart(chart_df)
 
         if "CorrectDecision" in audited.columns:
-        st.bar_chart(audited["CorrectDecision"].value_counts())
+            st.bar_chart(audited["CorrectDecision"].value_counts())
 
         if "HelpfulOutcome" in audited.columns:
-        st.bar_chart(audited["HelpfulOutcome"].value_counts())
+            st.bar_chart(audited["HelpfulOutcome"].value_counts())
+
 
 
         # --- Rolling Accuracy ---
