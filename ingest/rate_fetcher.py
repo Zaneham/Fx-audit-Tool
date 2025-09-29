@@ -60,13 +60,6 @@ def fetch_actual_rate(
     provider: str = DEFAULT_PROVIDER,
     as_of_yesterday: bool = False,
 ) -> Optional[float]:
-    """
-    Fetches exchange rate base->quote.
-    - as_of: timezone-naive UTC datetime to request historical rate; if None, fetches latest.
-    - as_of_yesterday: when True, overrides as_of to yesterday 23:59 UTC to avoid midnight ambiguity.
-    - Uses simple shelve-backed cache and retry/backoff logic.
-    Returns float rate (base->quote), or None on failure.
-    """
     base = base.upper().strip()
     quote = quote.upper().strip()
 
@@ -76,9 +69,9 @@ def fetch_actual_rate(
     cache_key = _cache_key(base, quote, as_of)
     cached = _read_cache(cache_key)
     if cached is not None and not math.isnan(cached):
+        print(f"[CACHE HIT] {cache_key} → {cached}")
         return cached
 
-    # Build request: exchangerate.host supports /{date}?base=BASE&symbols=QUOTE or /latest
     if as_of:
         date_str = as_of.strftime("%Y-%m-%d")
         url = f"{provider}/{date_str}"
@@ -86,35 +79,37 @@ def fetch_actual_rate(
         url = f"{provider}/latest"
 
     params = {"base": base, "symbols": quote}
+    print(f"[FETCH] Attempting {url} with params {params}")
 
     backoff = 1.0
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+            print(f"[RESPONSE {attempt}] Status: {resp.status_code}")
+            print(f"[RESPONSE {attempt}] Body: {resp.text}")
             resp.raise_for_status()
             body = resp.json()
-            # Expected shape for exchangerate.host: {"success": true, "rates": {"USD": 1.23}, ...}
             rates = body.get("rates") or {}
             rate = rates.get(quote)
             if rate is None:
-                # Some providers use "result" or different shapes; try common fallbacks
                 if "result" in body:
                     rate = body.get("result")
                 else:
+                    print(f"[ERROR] No rate found for {base}/{quote} in response.")
                     rate = None
             if rate is not None:
                 rate = float(rate)
                 _write_cache(cache_key, rate)
+                print(f"[SUCCESS] {base}/{quote} → {rate}")
                 return rate
-            # if no rate, raise to trigger retry/fallback
             raise ValueError(f"No rate found in provider response for {base}/{quote}")
         except Exception as exc:
-            # last attempt -> give up
+            print(f"[RETRY {attempt}] Error: {exc}")
             if attempt == MAX_RETRIES:
+                print(f"[FAILURE] Giving up after {MAX_RETRIES} attempts.")
                 return None
-            # exponential backoff
             time.sleep(backoff)
             backoff *= RETRY_BACKOFF
-            continue
 
     return None
+
