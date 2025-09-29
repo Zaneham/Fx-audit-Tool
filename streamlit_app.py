@@ -21,8 +21,8 @@ from validators import infer_pair_from_df_or_filename, validate_schema
 from audit.evaluator import evaluate_dataframe
 from audit.summary import compute_summary
 from ingest.rate_fetcher import fetch_actual_rate
-dotenv.load_dotenv()
-print(f"API key: {os.getenv('FX_API_KEY')}")
+
+api_key = os.getenv("FX_API_KEY")
 
 st.set_page_config(page_title="Hedge Audit Demo", layout="wide")
 st.title("Hedge Audit Demo")
