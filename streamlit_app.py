@@ -98,9 +98,21 @@ if run:
 actual_rate = _parse_actual(actual_input)
 
 if actual_rate is None:
+    # Ensure base and quote are present
+    if not base or not quote:
+        if infer_pair:
+            try:
+                pair = infer_pair_from_df_or_filename(df, filename)
+                base, quote = pair
+            except Exception as e:
+                _display_error(f"Failed to infer pair: {e}")
+        else:
+            _display_error("No actual rate provided and base/quote currencies are missing.")
+
     actual_rate = _cached_fetch_rate(base, quote, use_yesterday)
     if actual_rate is None:
         _display_error(f"Rate provider returned no rate for {base}/{quote}.")
+
 
 
     # Infer pair if needed
