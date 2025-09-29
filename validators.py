@@ -1,17 +1,19 @@
+# validators.py
 # -*- coding: utf-8 -*-
 """
-Created on Mon Sep 29 13:06:12 2025
-
-@author: GGPC
+Validation and pair inference helpers for Hedge Audit Demo
 """
 
-# validators.py
 from typing import List, Optional, Tuple
 import re
 import pandas as pd
 
-
 REQUIRED_COLUMNS = ["Timestamp", "Predicted_Rate", "Live_Rate", "Decision"]
+
+_FILENAME_PAIR_REGEXES = [
+    re.compile(r"([A-Za-z]{3})[_-]?([A-Za-z]{3})", re.IGNORECASE),   # nzdusd, nzd_usd, NZD-USD
+    re.compile(r"([A-Za-z]{3})/([A-Za-z]{3})", re.IGNORECASE),       # NZD/USD
+]
 
 
 def validate_schema(df: pd.DataFrame) -> Tuple[bool, List[str]]:
@@ -28,52 +30,12 @@ def validate_schema(df: pd.DataFrame) -> Tuple[bool, List[str]]:
     return (len(missing) == 0, missing)
 
 
-_FILENAME_PAIR_REGEXES = [
-    re.compile(r"([A-Za-z]{3})[_-]?([A-Za-z]{3})", re.IGNORECASE),   # nzdusd, nzd_usd, NZD-USD
-    re.compile(r"([A-Za-z]{3})/([A-Za-z]{3})", re.IGNORECASE),       # NZD/USD
-]
-
-
 def _normalize_pair_tuple(a: str, b: str) -> Tuple[str, str]:
     return (a.upper().strip(), b.upper().strip())
 
 
-def infer_pair_from_df_or_filename(df: pd.DataFrame, filename: Optional[str] = None) -> Optional[Tuple[str, str]]:
-    """
-    Attempt to infer currency pair in priority:
-      1) 'Pair' column (first non-null entry like 'NZD/USD' or 'nzdusd')
-      2) Filename patterns (nzdusd, nzd_usd, NZD-USD, NZD/USD)
-    Returns (BASE, QUOTE) or None.
-    """
-    # 1) Try Pair column
-    if "Pair" in df.columns:
-        col = df["Pair"].dropna().astype(str)
-        if not col.empty:
-            first = col.iloc[0].strip()
-            parsed = _parse_pair_string(first)
-            if parsed:
-                return parsed
-
-    # 2) Try other columns that might contain pair info
-    for alt in ["pair", "currency_pair", "pair_name"]:
-        if alt in (c.lower() for c in df.columns):
-            series = df[[c for c in df.columns if c.lower() == alt][0]].dropna().astype(str)
-            if not series.empty:
-                parsed = _parse_pair_string(series.iloc[0].strip())
-                if parsed:
-                    return parsed
-
-    # 3) Try filename
-    if filename:
-        base = _parse_pair_string(filename)
-        if base:
-            return base
-
-    return None
-
-
 def _parse_pair_string(s: str) -> Optional[Tuple[str, str]]:
-    """Parse strings like NZDUSD, NZD_USD, NZD-USD, NZD/USD, nzd/usd, 'NZD USD'."""
+    """Parse strings like NZDUSD, NZD_USD, NZD-USD, NZD/USD, 'NZD USD'."""
     s = s.strip()
     # common separators
     for sep in [" ", "_", "-", "/"]:
@@ -97,3 +59,49 @@ def _parse_pair_string(s: str) -> Optional[Tuple[str, str]]:
                 return _normalize_pair_tuple(a, b)
 
     return None
+
+
+def infer_pair_from_df_or_filename(df: pd.DataFrame, filename: Optional[str] = None) -> Tuple[str, str]:
+    """
+    Attempt to infer currency pair in priority:
+      1) Explicit Base/Quote columns
+      2) 'Pair' column (first non-null entry like 'NZD/USD' or 'nzdusd')
+      3) Filename patterns (nzdusd, nzd_usd, NZD-USD, NZD/USD)
+    Returns (BASE, QUOTE) or raises RuntimeError if nothing can be inferred.
+    """
+
+    # 1) Prefer explicit Base/Quote columns
+    if "Base" in df.columns and "Quote" in df.columns:
+        return (
+            str(df["Base"].iloc[0]).strip().upper(),
+            str(df["Quote"].iloc[0]).strip().upper(),
+        )
+
+    # 2) Try Pair column
+    if "Pair" in df.columns:
+        col = df["Pair"].dropna().astype(str)
+        if not col.empty:
+            parsed = _parse_pair_string(col.iloc[0].strip())
+            if parsed:
+                return parsed
+
+    # 3) Try other possible pair columns
+    for alt in ["pair", "currency_pair", "pair_name"]:
+        if alt in (c.lower() for c in df.columns):
+            series = df[[c for c in df.columns if c.lower() == alt][0]].dropna().astype(str)
+            if not series.empty:
+                parsed = _parse_pair_string(series.iloc[0].strip())
+                if parsed:
+                    return parsed
+
+    # 4) Try filename
+    if filename:
+        parsed = _parse_pair_string(filename)
+        if parsed:
+            return parsed
+
+    # If nothing worked, raise instead of silently defaulting
+    raise RuntimeError(
+        "Could not infer currency pair. Please untick 'Infer currency pair from file' "
+        "and specify Base/Quote manually."
+    )
