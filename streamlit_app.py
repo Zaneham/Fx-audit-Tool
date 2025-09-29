@@ -128,8 +128,6 @@ def build_pdf_report(base, quote, actual_rate, summary, audited):
     pdf.cell(200, 10, "Executive Summary", ln=True)
     pdf.set_font("Arial", "", 12)
 
-
-
     # Build the executive summary text
     exec_summary = f"""
 Prediction Accuracy: {summary.get('prediction_accuracy')}
@@ -140,11 +138,35 @@ Coverage: {summary.get('percent_profiled')}
 Key Finding:
 {summary.get('key_finding', 'No key finding generated.')}
 """
-
-    # Use multi_cell so long text wraps nicely
     pdf.multi_cell(0, 10, exec_summary)
 
-    return pdf
+    # --- Insert chart: Predicted vs Live ---
+    if "Predicted_Rate" in audited.columns and "Live_Rate" in audited.columns:
+        fig, ax = plt.subplots()
+        audited[["Predicted_Rate", "Live_Rate"]].plot(ax=ax)
+        ax.set_title("Predicted vs Live Rates")
+        ax.set_xlabel("Index")
+        ax.set_ylabel("Rate")
+        fig.tight_layout()
+
+        # Save to in-memory buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        plt.close(fig)
+        buf.seek(0)
+
+        # Embed image into PDF
+        pdf.image(buf, x=10, w=190)  # scale to page width
+        buf.close()
+
+    pdf.ln(10)
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(200, 10, "Appendix", ln=True)
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(200, 10, f"Generated: {datetime.now(timezone.utc).isoformat()}", ln=True)
+
+    # Return as bytes for Streamlit
+    return pdf.output(dest="S").encode("latin-1")
 
 
     # --- Insert chart: Predicted vs Live ---
