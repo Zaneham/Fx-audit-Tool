@@ -1,27 +1,28 @@
+# streamlit_app.py
 # -*- coding: utf-8 -*-
 """
-Created on Mon Sep 29 13:22:56 2025
-
-@author: Zane Hambly
+Streamlit front-end for Hedge Audit Demo
 """
+
+import os
+import sys
+from datetime import datetime, timedelta
+import io
+
+# Ensure repository root (folder containing this file) is on sys.path
+ROOT = os.path.abspath(os.path.dirname(__file__))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 import streamlit as st
 import pandas as pd
-import io
-from datetime import datetime, timedelta
-import os
-import sys
+
+from validators import infer_pair_from_df_or_filename, validate_schema
 from audit.evaluator import evaluate_dataframe
 from audit.summary import compute_summary
-from validators import infer_pair_from_df_or_filename
 from ingest.rate_fetcher import fetch_actual_rate
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "Fx-audit-Tool"))
-if REPO_ROOT not in sys.path:
-    sys.path.insert(0, REPO_ROOT)
-
 st.set_page_config(page_title="Hedge Audit Demo", layout="wide")
-
 st.title("Hedge Audit Demo")
 
 with st.sidebar:
@@ -47,7 +48,6 @@ with col2:
     if st.button("Load sample CSV"):
         try:
             sample_df = pd.read_csv("tests/sample_files/good.csv")
-            st.experimental_set_query_params(_loaded="sample")
             st.session_state["_sample_df"] = sample_df
             st.success("Sample CSV loaded (use Run audit to execute).")
         except Exception as e:
@@ -55,57 +55,73 @@ with col2:
 
 def _parse_actual(text: str):
     try:
-        if text is None or text.strip() == "":
+        if text is None or str(text).strip() == "":
             return None
-        return float(text.strip())
+        return float(str(text).strip())
     except Exception:
         return None
 
 def _display_error(msg: str):
     st.error(msg)
-    st.stop()
+    raise RuntimeError(msg)
+
+@st.cache_data(ttl=60 * 60)
+def _cached_fetch_rate(base: str, quote: str, use_yesterday_flag: bool):
+    return fetch_actual_rate(base, quote, as_of_yesterday=use_yesterday_flag)
 
 if run:
-    # obtain DataFrame
+    # Determine DataFrame source
     if "_sample_df" in st.session_state and st.session_state.get("_sample_df") is not None and uploaded is None:
         df = st.session_state["_sample_df"]
+        filename = "sample.csv"
     elif uploaded is not None:
         try:
             df = pd.read_csv(io.BytesIO(uploaded.read()))
+            filename = getattr(uploaded, "name", "uploaded.csv") or "uploaded.csv"
         except Exception as e:
             _display_error(f"Failed to parse uploaded CSV: {e}")
     else:
         _display_error("Please upload a CSV or load the sample CSV.")
 
-    # validate basic shape
-    ok, missing = (True, [])  # light validation here; detailed validation occurs in backend
-    # determine actual rate
+    # Basic validation
+    ok, missing = validate_schema(df)
+    if not ok:
+        _display_error(f"CSV missing required columns: {', '.join(missing)}")
+
     actual_rate = _parse_actual(actual_input)
+
+    # Infer pair if needed
+    pair = None
     if actual_rate is None:
-        # explicit base/quote provided
         if base and quote:
             pair = (base.upper().strip(), quote.upper().strip())
         elif infer_pair:
-            pair = infer_pair_from_df_or_filename(df, uploaded.name if uploaded else "sample.csv")
+            try:
+                pair = infer_pair_from_df_or_filename(df, filename)
+            except Exception as e:
+                _display_error(f"Failed to infer pair: {e}")
         else:
             pair = None
 
         if pair is None:
             _display_error("No actual rate provided and unable to determine currency pair. Provide actual rate or base+quote.")
-        # fetch rate (best-effort)
-        try:
-            actual_rate = fetch_actual_rate(pair[0], pair[1], as_of_yesterday=use_yesterday)
-        except Exception as e:
-            _display_error(f"Rate fetch failed for {pair}: {e}")
-        if actual_rate is None:
-            _display_error(f"Rate provider returned no rate for {pair}.")
 
-    # run evaluation
+    # Fetch rate and run evaluation inside spinner
     try:
-        audited = evaluate_dataframe(df, actual_rate=actual_rate, fill_missing_only=True)
-        summary = compute_summary(audited, by_pair=True)
+        with st.spinner("Fetching rate and evaluating..."):
+            if actual_rate is None:
+                actual_rate = _cached_fetch_rate(pair[0], pair[1], use_yesterday)
+                if actual_rate is None:
+                    _display_error(f"Rate provider returned no rate for {pair}.")
+
+            audited = evaluate_dataframe(df, actual_rate=actual_rate, fill_missing_only=True)
+            summary = compute_summary(audited, by_pair=True)
+    except RuntimeError:
+        # message already shown via _display_error
+        pass
     except Exception as e:
-        _display_error(f"Audit failed: {e}")
+        st.error(f"Unexpected error during audit: {e}")
+        raise
 
     st.success("Audit complete")
     st.markdown("### Summary")
@@ -117,6 +133,5 @@ if run:
     csv_bytes = audited.to_csv(index=False).encode("utf-8")
     st.download_button("Download audited CSV", data=csv_bytes, file_name="audited.csv", mime="text/csv")
 
-    # optional: small PDF summary (if you add report generator later)
     st.markdown("---")
     st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · Generated: {datetime.utcnow().isoformat()}Z")
