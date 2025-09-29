@@ -141,6 +141,8 @@ Coverage: {summary.get('percent_profiled')}
 
 Key Finding:
 {summary.get('key_finding', 'No key finding generated.')}
+
+
 """
     pdf.multi_cell(0, 10, exec_summary)
 
@@ -405,6 +407,10 @@ if run:
             insights.append("Insufficient data to generate a clear finding.")
 
         key_finding = " ".join(insights)
+        summary["key_finding"] = key_finding
+
+      
+
 
         st.write({
             "Prediction Accuracy": acc,
