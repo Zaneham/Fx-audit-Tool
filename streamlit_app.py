@@ -22,8 +22,6 @@ from audit.evaluator import evaluate_dataframe
 from audit.summary import compute_summary
 from ingest.rate_fetcher import fetch_actual_rate
 
-api_key = os.getenv("FX_API_KEY")
-
 st.set_page_config(page_title="Hedge Audit Demo", layout="wide")
 st.title("Hedge Audit Demo")
 
@@ -113,17 +111,14 @@ if run:
         else:
             _display_error("No actual rate provided and base/quote currencies are missing.")
 
-actual_rate = _cached_fetch_rate(base, quote, use_yesterday)
-if actual_rate is None:
-    fallback_rate = 0.6123 if (base, quote) == ("NZD", "USD") else None
-    if fallback_rate:
-        st.warning(f"Using fallback rate for {base}/{quote}: {fallback_rate}")
-        actual_rate = fallback_rate
-    else:
-        _display_error(f"Rate provider returned no rate for {base}/{quote}, and no fallback is available.")
-
-
-
+        actual_rate = _cached_fetch_rate(base, quote, use_yesterday)
+        if actual_rate is None:
+            fallback_rate = 0.6123 if (base, quote) == ("NZD", "USD") else None
+            if fallback_rate:
+                st.warning(f"Using fallback rate for {base}/{quote}: {fallback_rate}")
+                actual_rate = fallback_rate
+            else:
+                _display_error(f"Rate provider returned no rate for {base}/{quote}, and no fallback is available.")
 
     # Run audit
     try:
