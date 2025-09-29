@@ -37,7 +37,7 @@ Upload a CSV of hedge decisions and this tool will:
 - Compare predicted vs live rates
 - Generate accuracy metrics, charts, and a professional report
 
-👉 If you just want to see it in action, click **Run Demo** below — no setup required.
+👉 If you just want to see it in action, click **Run Demo** below or you can add your own CSV file
 """
 )
 
