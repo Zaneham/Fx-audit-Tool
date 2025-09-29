@@ -172,6 +172,7 @@ Key Finding:
 # more Friendly Schema Validator 
 
 
+# --- Friendly Schema Validator ---
 def validate_schema(df):
     """
     Friendly schema validator:
@@ -179,6 +180,7 @@ def validate_schema(df):
     - Accepts optional extras
     - Aliases CorrectDecision -> Decision if needed
     - Ensures CorrectDecision is numeric (0/1)
+    - Cleans Notional column to numeric (defaults to 0 if missing/invalid)
     - Fills missing optional columns with None
     """
 
@@ -207,6 +209,10 @@ def validate_schema(df):
               .astype(int)
         )
 
+    # Clean Notional column if present
+    if "Notional" in df.columns:
+        df["Notional"] = pd.to_numeric(df["Notional"], errors="coerce").fillna(0)
+
     # Add placeholders for any missing optional columns
     for col in optional:
         if col not in df.columns:
@@ -222,6 +228,7 @@ def validate_schema(df):
         )
 
     return df
+
 
 
 
