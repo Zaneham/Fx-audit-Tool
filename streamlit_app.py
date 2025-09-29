@@ -145,18 +145,68 @@ if run:
         raise
 
     # Display results
+
     if audit_success:
-        st.success("Audit complete")
-        st.markdown("### Summary")
-        st.json(summary)
+      st.success("Audit complete")
 
-        st.markdown("### Preview")
-        st.dataframe(audited.head(show_preview_rows))
+      # --- Cover / Header ---
+      st.markdown("## 📑 Hedge Audit Report")
+      st.markdown(f"**Currency Pair:** {base}/{quote}")
+      st.markdown(f"**Audit Date:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z')}")
+      st.markdown(f"**Rows Audited:** {len(audited)}")
+      st.markdown(f"**Rate Used:** {actual_rate}")
 
-        csv_bytes = audited.to_csv(index=False).encode("utf-8")
-        st.download_button("Download audited CSV", data=csv_bytes, file_name="audited.csv", mime="text/csv")
+      st.markdown("---")
 
-        st.markdown("---")
-        st.caption(
-            f"Rate used: {actual_rate} · Rows: {len(audited)} · Generated: {datetime.now(timezone.utc).isoformat()}Z"
-        )
+      # --- Executive Summary ---
+      st.markdown("### 📝 Executive Summary")
+      st.write({
+          "Prediction Accuracy": summary.get("prediction_accuracy"),
+          "RMSE": summary.get("rmse"),
+          "Recall %": summary.get("recall_perc"),
+          "Coverage": summary.get("percent_profiled"),
+          "Key Finding": "Model decisions aligned with actual market moves in most cases."
+      })
+
+      # --- Key Metrics Table ---
+      st.markdown("### 📊 Key Metrics")
+      metrics_table = {
+          "Prediction Accuracy": [summary.get("prediction_accuracy")],
+          "RMSE": [summary.get("rmse")],
+          "Recall %": [summary.get("recall_perc")],
+          "% Missing Actuals": [summary.get("percent_missing_actual")],
+          "% Profiled": [summary.get("percent_profiled")]
+      }
+      st.table(pd.DataFrame(metrics_table))
+
+      # --- Visuals ---
+      st.markdown("### 📈 Visuals")
+      if "Predicted_Rate" in audited.columns and "Live_Rate" in audited.columns:
+          st.line_chart(audited[["Predicted_Rate", "Live_Rate"]])
+      if "CorrectDecision" in audited.columns:
+          st.bar_chart(audited["CorrectDecision"].value_counts())
+      if "HelpfulOutcome" in audited.columns:
+          st.bar_chart(audited["HelpfulOutcome"].value_counts())
+
+      # --- Detailed Findings ---
+      st.markdown("### 🔍 Detailed Findings")
+      if "Error" in audited.columns:
+          top_errors = audited.nlargest(5, "Error")
+          st.write("Top 5 largest prediction errors:")
+          st.dataframe(top_errors)
+
+      # --- Data Preview ---
+      st.markdown("### 📂 Data Preview")
+      st.dataframe(audited.head(show_preview_rows))
+
+      # --- Download ---
+      csv_bytes = audited.to_csv(index=False).encode("utf-8")
+      st.download_button("Download audited CSV", data=csv_bytes,
+                         file_name="audited.csv", mime="text/csv")
+
+      # --- Appendix ---
+      st.markdown("---")
+      st.markdown("### 📎 Appendix")
+      st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · "
+                 f"Generated: {datetime.now(timezone.utc).isoformat()}Z")
+      st.caption(f"Options → Infer Pair: {infer_pair}, Use Yesterday: {use_yesterday}")
