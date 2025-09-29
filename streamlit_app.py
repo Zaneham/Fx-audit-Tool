@@ -288,9 +288,9 @@ if run:
         st.markdown("### 📈 Visuals")
 
         if "Predicted_Rate" in audited.columns and "Live_Rate" in audited.columns:
-        audited = audited.copy()
-        audited["Day"] = range(1, len(audited) + 1)
-        chart_df = audited.set_index("Day")[["Predicted_Rate", "Live_Rate"]]
+            audited = audited.copy()
+            audited["Day"] = range(1, len(audited) + 1)
+            chart_df = audited.set_index("Day")[["Predicted_Rate", "Live_Rate"]]
         st.line_chart(chart_df)
 
         if "CorrectDecision" in audited.columns:
