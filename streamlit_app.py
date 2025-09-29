@@ -23,7 +23,7 @@ from audit.summary import compute_summary
 from ingest.rate_fetcher import fetch_actual_rate
 from fpdf import FPDF
 import matplotlib.pyplot as plt
-
+import tempfile
 
 
 
@@ -108,6 +108,11 @@ def _cached_fetch_rate(base: str, quote: str, use_yesterday_flag: bool):
     q = (quote or "").upper().strip()
     return fetch_actual_rate(b, q, as_of_yesterday=use_yesterday_flag)
 
+from fpdf import FPDF
+import matplotlib.pyplot as plt
+import io, tempfile, os
+from datetime import datetime, timezone
+
 def build_pdf_report(base, quote, actual_rate, summary, audited):
     pdf = FPDF()
     pdf.add_page()
@@ -128,7 +133,6 @@ def build_pdf_report(base, quote, actual_rate, summary, audited):
     pdf.cell(200, 10, "Executive Summary", ln=True)
     pdf.set_font("Arial", "", 12)
 
-    # Build the executive summary text
     exec_summary = f"""
 Prediction Accuracy: {summary.get('prediction_accuracy')}
 RMSE: {summary.get('rmse')}
@@ -149,15 +153,18 @@ Key Finding:
         ax.set_ylabel("Rate")
         fig.tight_layout()
 
-        # Save to in-memory buffer
-        buf = io.BytesIO()
-        plt.savefig(buf, format="png")
-        plt.close(fig)
-        buf.seek(0)
+        # Save chart to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+            fig.savefig(tmpfile.name, format="png")
+            chart_path = tmpfile.name
 
-        # Embed image into PDF
-        pdf.image(buf, x=10, w=190)  # scale to page width
-        buf.close()
+        plt.close(fig)
+
+        # Embed into PDF
+        pdf.image(chart_path, x=10, w=190)
+
+        # Clean up temp file
+        os.remove(chart_path)
 
     pdf.ln(10)
     pdf.set_font("Arial", "B", 14)
@@ -167,29 +174,6 @@ Key Finding:
 
     # Return as bytes for Streamlit
     return pdf.output(dest="S").encode("latin-1")
-
-
-    # --- Insert chart: Predicted vs Live ---
-    if "Predicted_Rate" in audited.columns and "Live_Rate" in audited.columns:
-        plt.figure()
-        audited[["Predicted_Rate", "Live_Rate"]].plot()
-        plt.title("Predicted vs Live Rates")
-        plt.xlabel("Index")
-        plt.ylabel("Rate")
-        plt.tight_layout()
-        chart_path = "chart.png"
-        plt.savefig(chart_path)
-        plt.close()
-        pdf.image(chart_path, w=170)
-
-    pdf.ln(10)
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(200, 10, "Appendix", ln=True)
-    pdf.set_font("Arial", "", 12)
-    pdf.cell(200, 10, f"Generated: {datetime.now(timezone.utc).isoformat()}", ln=True)
-
-    return pdf.output(dest="S").encode("latin-1")
-
 
 # more Friendly Schema Validator 
 
