@@ -385,7 +385,7 @@ if run:
             "Key Finding": key_finding
         })
 
-        # --- Rolling Accuracy (safe cast) ---
+            # --- Rolling Accuracy (safe cast) ---
         if "CorrectDecision" in audited.columns:
             df_acc = audited.copy()
             df_acc["CorrectDecision"] = (
@@ -394,8 +394,11 @@ if run:
                   .astype(int)
             )
             df_acc["RollingAccuracy"] = (
-                df_acc["CorrectDecision"].
+                df_acc["CorrectDecision"].rolling(window=7, min_periods=1).mean()
             )
+
+            st.line_chart(df_acc[["RollingAccuracy"]])
+            st.caption("🔹 Rolling 7‑day Accuracy — shows how consistent the model’s decisions were over time.")
 
       
            # --- Key Metrics Table ---
