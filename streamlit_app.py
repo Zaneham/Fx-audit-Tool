@@ -66,7 +66,7 @@ def _display_error(msg: str):
     raise RuntimeError(msg)
 
 @st.cache_data(ttl=60 * 60)
-print(f"[DEBUG] Base: {base}, Quote: {quote}")
+
 def _cached_fetch_rate(base: str, quote: str, use_yesterday_flag: bool):
     return fetch_actual_rate(base, quote, as_of_yesterday=use_yesterday_flag)
 
