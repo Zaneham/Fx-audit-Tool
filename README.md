@@ -42,7 +42,7 @@ Upload a CSV of predictions and hedge/no‑hedge calls, and the app will evaluat
 
 
 - **Landing Page & Upload**  
-  ![Upload Screen](docs/screenshot.png)
+  ![Upload Screen](docs/Screenshot.png)
 
 - **Key Metrics Dashboard**  
   ![Metrics Dashboard](docs/screenshot_metrics.png)
