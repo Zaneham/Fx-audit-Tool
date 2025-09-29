@@ -170,6 +170,7 @@ Key Finding:
 
 
 # --- Friendly Schema Validator ---
+
 def validate_schema(df):
     """
     Friendly schema validator:
@@ -236,7 +237,6 @@ if run:
     except RuntimeError as e:
         st.warning(f"{e} — falling back to sample NZD/AUD dataset for demo.")
         # --- Fallback sample dataset ---
-        import numpy as np
         np.random.seed(42)
         n = 30
         dates = pd.date_range("2024-01-01", periods=n, freq="D")
@@ -255,6 +255,12 @@ if run:
         })
         filename = "fallback_nzd_aud.csv"
 
+    # --- Normalize Decision column ---
+    if "Decision" in df.columns and "CorrectDecision" not in df.columns:
+        df["CorrectDecision"] = df["Decision"].map(
+            {"Correct": 1, "Incorrect": 0}
+        )
+
     # Normalize Timestamp column automatically
     if "Timestamp" in df.columns:
         df["Timestamp"] = df["Timestamp"].astype(str).str.strip()
@@ -271,7 +277,6 @@ if run:
 
     # Parse actual rate or infer pair
     actual_rate = _parse_actual(actual_input)
-
 
     base = (base or "").upper().strip()
     quote = (quote or "").upper().strip()
@@ -326,19 +331,15 @@ if run:
 
         st.markdown("---")
 
-        # --- Executive Summary ## This is also a statement generator
+        # --- Executive Summary (dynamic generator) ---
         st.markdown("### 📝 Executive Summary")
 
-        # Pull metrics safely
         acc = summary.get("prediction_accuracy")
         rmse = summary.get("rmse")
         recall = summary.get("recall_perc")
         coverage = summary.get("percent_profiled")
 
-        # Generate a dynamic key finding
         insights = []
-
-        # Accuracy-driven insights
         if acc is not None:
             if acc >= 0.9:
                 insights.append("The model achieved very high accuracy, closely tracking market moves.")
@@ -347,7 +348,6 @@ if run:
             else:
                 insights.append("The model struggled to consistently align with market moves.")
 
-        # RMSE-driven insights
         if rmse is not None:
             if rmse < 0.02:
                 insights.append("Prediction errors were minimal, indicating strong rate stability.")
@@ -356,7 +356,6 @@ if run:
             else:
                 insights.append("Prediction errors were relatively large, pointing to instability.")
 
-        # Recall-driven insights
         if recall is not None:
             if recall >= 0.8:
                 insights.append("The model successfully identified most of the key opportunities.")
@@ -365,7 +364,6 @@ if run:
             else:
                 insights.append("The model missed many opportunities, limiting practical usefulness.")
 
-        # Coverage-driven insights
         if coverage is not None:
             if coverage >= 0.9:
                 insights.append("Coverage was broad, ensuring decisions were made across nearly all cases.")
@@ -374,14 +372,11 @@ if run:
             else:
                 insights.append("Coverage was limited, reducing the model’s applicability.")
 
-        # Fallback if no metrics available
         if not insights:
             insights.append("Insufficient data to generate a clear finding.")
 
-        # Join into a narrative
         key_finding = " ".join(insights)
 
-        # Display summary
         st.write({
             "Prediction Accuracy": acc,
             "RMSE": rmse,
@@ -389,6 +384,17 @@ if run:
             "Coverage": coverage,
             "Key Finding": key_finding
         })
+
+        # --- Rolling Accuracy (safe cast) ---
+        if "CorrectDecision" in audited.columns:
+            df_acc = audited.copy()
+            df_acc["CorrectDecision"] = (
+                pd.to_numeric(df_acc["CorrectDecision"], errors="coerce")
+                  .fillna(0)
+                  .astype(int)
+            )
+            df_acc["RollingAccuracy"] = (
+                df_acc["CorrectDecision"].
 
       
            # --- Key Metrics Table ---
