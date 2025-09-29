@@ -57,66 +57,40 @@ def fetch_actual_rate(
     base: str,
     quote: str,
     as_of: Optional[datetime] = None,
-    provider: str = DEFAULT_PROVIDER,
+    provider: str = "https://v6.exchangerate-api.com/v6",
     as_of_yesterday: bool = False,
 ) -> Optional[float]:
     base = base.upper().strip()
     quote = quote.upper().strip()
-    api_key = os.getenv("FX_API_KEY")  # 🔐 Load from .env or Streamlit secrets
+    api_key = os.getenv("FX_API_KEY")
+
+    if not api_key:
+        print("[ERROR] FX_API_KEY not found in environment.")
+        return None
 
     if as_of_yesterday:
-        as_of = (datetime.utcnow() - timedelta(days=1)).replace(hour=23, minute=59, second=0, microsecond=0)
+        print("[WARNING] ExchangeRate-API does not support historical rates. Using latest instead.")
 
-    cache_key = _cache_key(base, quote, as_of)
-    cached = _read_cache(cache_key)
-    if cached is not None and not math.isnan(cached):
-        print(f"[CACHE HIT] {cache_key} → {cached}")
-        return cached
+    url = f"{provider}/{api_key}/latest/{base}"
+    print(f"[FETCH] {url} → looking for {quote}")
 
-    if as_of:
-        date_str = as_of.strftime("%Y-%m-%d")
-        url = f"{provider}/{date_str}"
-    else:
-        url = f"{provider}/latest"
+    try:
+        resp = requests.get(url, timeout=REQUEST_TIMEOUT)
+        print(f"[RESPONSE] Status: {resp.status_code}")
+        print(f"[RESPONSE] Body: {resp.text}")
+        resp.raise_for_status()
+        data = resp.json()
+        rate = data.get("conversion_rates", {}).get(quote)
+        if rate is not None:
+            rate = float(rate)
+            _write_cache(_cache_key(base, quote, None), rate)
+            print(f"[SUCCESS] {base}/{quote} → {rate}")
+            return rate
+        print(f"[ERROR] No rate found for {base}/{quote}")
+        return None
+    except Exception as e:
+        print(f"[FAILURE] Error fetching rate: {e}")
+        return None
 
-    params = {"base": base, "symbols": quote}
-    if api_key:
-        params["apikey"] = api_key  # 🔐 Inject API key if required
-
-    print(f"[FETCH] Attempting {url} with params {params}")
-
-    backoff = 1.0
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
-            print(f"[RESPONSE {attempt}] Status: {resp.status_code}")
-            print(f"[RESPONSE {attempt}] Body: {resp.text}")
-            resp.raise_for_status()
-            body = resp.json()
-            rates = body.get("rates") or {}
-            rate = rates.get(quote)
-            if rate is None and "result" in body:
-                rate = body.get("result")
-            if rate is not None:
-                rate = float(rate)
-                _write_cache(cache_key, rate)
-                print(f"[SUCCESS] {base}/{quote} → {rate}")
-                return rate
-            print(f"[ERROR] No rate found for {base}/{quote} in response.")
-        except Exception as exc:
-            print(f"[RETRY {attempt}] Error: {exc}")
-            if attempt == MAX_RETRIES:
-                print(f"[FAILURE] Giving up after {MAX_RETRIES} attempts.")
-
-        time.sleep(backoff)
-        backoff *= RETRY_BACKOFF
-
-    # 🛠️ Fallback demo rate
-    fallback_rate = 0.6123 if (base, quote) == ("NZD", "USD") else None
-    if fallback_rate:
-        print(f"[FALLBACK] Using demo rate for {base}/{quote}: {fallback_rate}")
-        return fallback_rate
-
-    return None
 
 
