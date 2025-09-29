@@ -159,7 +159,46 @@ Coverage: {summary.get('percent_profiled')}
     return pdf.output(dest="S").encode("latin-1")
 
 
-# Main audit logic
+# --- Friendly Schema Validator ---
+def validate_schema(df):
+    """
+    Friendly schema validator:
+    - Requires only core columns
+    - Accepts optional extras
+    - Aliases CorrectDecision -> Decision if needed
+    - Fills missing optional columns with None
+    """
+
+    required = {"Timestamp", "Predicted_Rate", "Live_Rate"}
+    optional = {"Decision", "CorrectDecision", "HelpfulOutcome", "Notional"}
+
+    # Check required
+    missing = required - set(df.columns)
+    if missing:
+        raise RuntimeError(f"CSV missing required columns: {', '.join(missing)}")
+
+    # Alias mapping: if CorrectDecision exists but Decision doesn't, create it
+    if "CorrectDecision" in df.columns and "Decision" not in df.columns:
+        df["Decision"] = df["CorrectDecision"].map({1: "Correct", 0: "Incorrect"})
+
+    # Add placeholders for any missing optional columns
+    for col in optional:
+        if col not in df.columns:
+            df[col] = None
+
+    # Warn if optional columns are missing
+    missing_optional = optional - set(df.columns)
+    if missing_optional:
+        import streamlit as st
+        st.warning(
+            f"Some optional columns are missing: {', '.join(missing_optional)}. "
+            "Charts may be limited, but the app will still run."
+        )
+
+    return df
+
+
+# --- Main audit logic ---
 if run:
     audit_success = False
     summary = None
@@ -181,23 +220,37 @@ if run:
     else:
         _display_error("Please upload a CSV or load the sample CSV.")
 
-    # Validate schema
-    ok, missing = validate_schema(df)
-    if not ok:
-        _display_error(f"CSV missing required columns: {', '.join(missing)}")
+    # Validate schema (friendly mode with fallback)
+    try:
+        df = validate_schema(df)
+    except RuntimeError as e:
+        st.warning(f"{e} — falling back to sample NZD/AUD dataset for demo.")
+        # --- Fallback sample dataset ---
+        import numpy as np
+        np.random.seed(42)
+        n = 30
+        dates = pd.date_range("2024-01-01", periods=n, freq="D")
+        pred = 0.93 + np.cumsum(np.random.normal(0, 0.002, n))
+        live = pred + np.random.normal(0.001, 0.0025, n)
+        correct_decision = (np.sign(np.diff(pred, prepend=pred[0])) ==
+                            np.sign(np.diff(live, prepend=live[0]))).astype(int)
+        df = pd.DataFrame({
+            "Timestamp": dates.strftime("%Y-%m-%d"),
+            "Predicted_Rate": np.round(pred, 5),
+            "Live_Rate": np.round(live, 5),
+            "Decision": np.where(correct_decision == 1, "Correct", "Incorrect"),
+            "CorrectDecision": correct_decision,
+            "HelpfulOutcome": ((correct_decision == 1) & (np.abs(live - pred) < 0.004)).astype(int),
+            "Notional": np.random.choice([50_000, 100_000, 250_000], size=n)
+        })
+        filename = "fallback_nzd_aud.csv"
 
     # Normalize Timestamp column automatically
     if "Timestamp" in df.columns:
-        # Strip whitespace and enforce string type first
         df["Timestamp"] = df["Timestamp"].astype(str).str.strip()
-
-        # Try parsing with a strict ISO format first
         parsed = pd.to_datetime(df["Timestamp"], format="%Y-%m-%d", errors="coerce")
-
-        # Fallback: if strict parsing fails, try a more flexible parse
         if parsed.isna().any():
             parsed = pd.to_datetime(df["Timestamp"], errors="coerce", dayfirst=False)
-
         df["Timestamp"] = parsed
 
         # Count bad rows
