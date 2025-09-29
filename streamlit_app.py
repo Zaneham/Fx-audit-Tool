@@ -95,7 +95,11 @@ if run:
     if not ok:
         _display_error(f"CSV missing required columns: {', '.join(missing)}")
 
-    actual_rate = _parse_actual(actual_input)
+actual_rate = _parse_actual(actual_input)
+ if actual_rate is None:
+ actual_rate = _cached_fetch_rate(base, quote, use_yesterday)
+ if actual_rate is None:
+ _display_error(f"Rate provider returned no rate for {base}/{quote}.")
 
     # Infer pair if needed
     pair = None
