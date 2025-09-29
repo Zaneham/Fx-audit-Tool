@@ -111,17 +111,16 @@ if run:
             _display_error("No actual rate provided and unable to determine currency pair. Provide actual rate or base+quote.")
 
     # Fetch rate and run evaluation inside spinner
-try:
-    with st.spinner("Fetching rate and evaluating..."):
-        if actual_rate is None:
-            actual_rate = _cached_fetch_rate(pair[0], pair[1], use_yesterday)
+    try:
+        with st.spinner("Fetching rate and evaluating..."):
             if actual_rate is None:
-                _display_error(f"Rate provider returned no rate for {pair}.")
+                actual_rate = _cached_fetch_rate(pair[0], pair[1], use_yesterday)
+                if actual_rate is None:
+                    _display_error(f"Rate provider returned no rate for {pair}.")
 
-        audited = evaluate_dataframe(df, actual_rate=actual_rate, fill_missing_only=True)
-        summary = compute_summary(audited, by_pair=True)
-        audit_success = True  # ✅ This line goes here, not inside the if-block
-
+            audited = evaluate_dataframe(df, actual_rate=actual_rate, fill_missing_only=True)
+            summary = compute_summary(audited, by_pair=True)
+            audit_success = True
     except RuntimeError:
         audit_success = False
     except Exception as e:
