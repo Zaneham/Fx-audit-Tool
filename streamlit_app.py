@@ -69,12 +69,13 @@ def _display_error(msg: str):
 def _cached_fetch_rate(base: str, quote: str, use_yesterday_flag: bool):
     return fetch_actual_rate(base, quote, as_of_yesterday=use_yesterday_flag)
 
+# Main audit logic
 if run:
     audit_success = False
     summary = None
     audited = None
 
-    # Determine DataFrame source
+    # Load DataFrame
     if "_sample_df" in st.session_state and st.session_state.get("_sample_df") is not None and uploaded is None:
         df = st.session_state["_sample_df"]
         filename = "sample.csv"
@@ -87,7 +88,7 @@ if run:
     else:
         _display_error("Please upload a CSV or load the sample CSV.")
 
-    # Basic validation
+    # Validate schema
     ok, missing = validate_schema(df)
     if not ok:
         _display_error(f"CSV missing required columns: {', '.join(missing)}")
@@ -110,7 +111,7 @@ if run:
         if pair is None:
             _display_error("No actual rate provided and unable to determine currency pair. Provide actual rate or base+quote.")
 
-    # Fetch rate and run evaluation inside spinner
+    # Run audit
     try:
         with st.spinner("Fetching rate and evaluating..."):
             if actual_rate is None:
@@ -128,7 +129,8 @@ if run:
         audit_success = False
         raise
 
-        if audit_success:
+    # Display results only if audit succeeded
+    if audit_success:
         st.success("Audit complete")
         st.markdown("### Summary")
         st.json(summary)
@@ -141,4 +143,3 @@ if run:
 
         st.markdown("---")
         st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · Generated: {datetime.utcnow().isoformat()}Z")
-
