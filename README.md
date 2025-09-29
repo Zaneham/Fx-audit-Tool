@@ -39,10 +39,10 @@ Upload a CSV of predictions and hedge/no‑hedge calls, and the app will evaluat
 
 ## 📸 Screenshots
 
-> Replace the placeholders below with actual screenshots from your app (e.g. `docs/screenshot_dashboard.png`).
+
 
 - **Landing Page & Upload**  
-  ![Upload Screen](docs/screenshot_upload.png)
+  ![Upload Screen](docs/screenshot.png)
 
 - **Key Metrics Dashboard**  
   ![Metrics Dashboard](docs/screenshot_metrics.png)
