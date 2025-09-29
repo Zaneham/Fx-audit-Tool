@@ -31,8 +31,6 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="Hedge Audit Demo", layout="wide")
 st.title("Hedge Audit Demo")
 
-st.set_page_config(page_title="Hedge Audit Demo", layout="wide")
-st.title("Hedge Audit Demo")
 
 # --- Landing description ---
 st.markdown(
