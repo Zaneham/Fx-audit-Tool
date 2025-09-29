@@ -6,4 +6,6 @@ streamlit
 
 requests
 
+
 python-dotenv
+fpdf
