@@ -63,6 +63,8 @@ def fetch_actual_rate(
     base = base.upper().strip()
     quote = quote.upper().strip()
     api_key = os.getenv("FX_API_KEY")
+    print(f"[DEBUG] Loaded FX_API_KEY: {api_key}")
+
 
     if not api_key:
         print("[ERROR] FX_API_KEY not found in environment.")
