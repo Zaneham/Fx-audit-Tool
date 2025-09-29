@@ -76,6 +76,8 @@ if run:
     audit_success = False
     summary = None
     audited = None
+    df = None
+    filename = None
 
     # Load DataFrame
     if "_sample_df" in st.session_state and st.session_state.get("_sample_df") is not None and uploaded is None:
@@ -95,12 +97,14 @@ if run:
     if not ok:
         _display_error(f"CSV missing required columns: {', '.join(missing)}")
 
-actual_rate = _parse_actual(actual_input)
+    # Parse actual rate or infer pair
+    actual_rate = _parse_actual(actual_input)
 
-if actual_rate is None:
-    # Ensure base and quote are present
-    if not base or not quote:
-        if infer_pair:
+    if actual_rate is None:
+        if base and quote:
+            base = base.upper().strip()
+            quote = quote.upper().strip()
+        elif infer_pair:
             try:
                 pair = infer_pair_from_df_or_filename(df, filename)
                 base, quote = pair
@@ -109,47 +113,22 @@ if actual_rate is None:
         else:
             _display_error("No actual rate provided and base/quote currencies are missing.")
 
-    actual_rate = _cached_fetch_rate(base, quote, use_yesterday)
-    if actual_rate is None:
-        _display_error(f"Rate provider returned no rate for {base}/{quote}.")
-
-
-
-    # Infer pair if needed
-    pair = None
-    if actual_rate is None:
-        if base and quote:
-            pair = (base.upper().strip(), quote.upper().strip())
-        elif infer_pair:
-            try:
-                pair = infer_pair_from_df_or_filename(df, filename)
-            except Exception as e:
-                _display_error(f"Failed to infer pair: {e}")
-        else:
-            pair = None
-
-        if pair is None:
-            _display_error("No actual rate provided and unable to determine currency pair. Provide actual rate or base+quote.")
+        actual_rate = _cached_fetch_rate(base, quote, use_yesterday)
+        if actual_rate is None:
+            _display_error(f"Rate provider returned no rate for {base}/{quote}.")
 
     # Run audit
     try:
         with st.spinner("Fetching rate and evaluating..."):
-            if actual_rate is None:
-                actual_rate = _cached_fetch_rate(pair[0], pair[1], use_yesterday)
-                if actual_rate is None:
-                    _display_error(f"Rate provider returned no rate for {pair}.")
-
             audited = evaluate_dataframe(df, actual_rate=actual_rate, fill_missing_only=True)
             summary = compute_summary(audited, by_pair=True)
             audit_success = True
-    except RuntimeError:
-        audit_success = False
     except Exception as e:
         st.error(f"Unexpected error during audit: {e}")
         audit_success = False
         raise
 
-    # Display results only if audit succeeded
+    # Display results
     if audit_success:
         st.success("Audit complete")
         st.markdown("### Summary")
