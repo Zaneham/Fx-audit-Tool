@@ -8,7 +8,8 @@ import os
 import sys
 import io
 import random
-from datetime import datetime, timezone
+from datetime import datetime, date, timedelta, timezone
+
 
 
 # Ensure repository root (folder containing this file) is on sys.path
@@ -46,12 +47,13 @@ Upload a CSV of hedge decisions and this tool will:
 )
 
 # --- Synthetic demo data generator ---
+
 def generate_eur_usd_sample(rows=100):
-    start = datetime.date(2024, 1, 1)
+    start = date(2024, 1, 1)   # use date directly
     data = []
     for i in range(rows):
-        date = start + datetime.timedelta(days=i)
-        timestamp = date.isoformat()  # YYYY-MM-DD
+        date_val = start + timedelta(days=i)   # use timedelta directly
+        timestamp = date_val.isoformat()  # YYYY-MM-DD
         pred = round(1.10 + random.uniform(-0.01, 0.01), 5)
         live = round(pred + random.uniform(-0.004, 0.004), 5)
         error = round(live - pred, 5)
