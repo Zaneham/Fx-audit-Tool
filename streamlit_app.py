@@ -546,18 +546,19 @@ if run:
         st.download_button("Download audited CSV", data=csv_bytes,
                            file_name="audited.csv", mime="text/csv")
 
-        # Build the PDF
-        pdf = build_pdf_report(base, quote, actual_rate, summary, audited)
+               # --- PDF Export ---
+        
+        pdf_bytes = build_pdf_report(base, quote, actual_rate, summary, audited)
 
-        # Convert to bytes for Streamlit
-        pdf_bytes = pdf.output(dest="S").encode("latin-1")
-
-        # Download button
+        # Streamlit download button
         st.download_button(
             "Download PDF Report",
-             data=pdf_bytes,
-             file_name="hedge_audit_report.pdf",
-             mime="application/pdf"
+            data=pdf_bytes,
+            file_name="hedge_audit_report.pdf",
+            mime="application/pdf"
+        )
+
+
                                   )
 
 
