@@ -514,11 +514,15 @@ if run:
 
         # --- Weighted Accuracy (if Notional column exists) ---
         if "Notional" in audited.columns and "CorrectDecision" in audited.columns:
-            weighted_acc = (
-                (audited["CorrectDecision"].astype(int) * audited["Notional"]).sum()
-                / audited["Notional"].sum()
-            )
-            st.metric("Value-Weighted Accuracy", f"{weighted_acc:.2%}")
+            total_notional = audited["Notional"].sum()
+            if total_notional > 0:
+                weighted_acc = (
+                    (audited["CorrectDecision"].astype(int) * audited["Notional"]).sum()
+                    / total_notional
+                )
+                st.metric("Value-Weighted Accuracy", f"{weighted_acc:.2%}")
+            else:
+                st.warning("Notional values sum to zero — cannot compute weighted accuracy.")
 
         # --- Detailed Findings ---
         st.markdown("### 🔍 Detailed Findings")
