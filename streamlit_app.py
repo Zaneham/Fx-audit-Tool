@@ -187,18 +187,14 @@ if run:
     ok, missing = validate_schema(df)
     if not ok:
         _display_error(f"CSV missing required columns: {', '.join(missing)}")
-        
-        # Normalize Timestamp column automatically
+
+    # Normalize Timestamp column automatically
     if "Timestamp" in df.columns:
-    # Try to parse flexibly
-     df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce", dayfirst=True)
-
-    # If any rows failed to parse, drop or flag them
-     bad_rows = df["Timestamp"].isna().sum()
-     if bad_rows > 0:
-        st.warning(f"{bad_rows} rows had unrecognized dates and were dropped.")
-        df = df.dropna(subset=["Timestamp"])
-
+        df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce", dayfirst=True)
+        bad_rows = df["Timestamp"].isna().sum()
+        if bad_rows > 0:
+            st.warning(f"{bad_rows} rows had unrecognized dates and were dropped.")
+            df = df.dropna(subset=["Timestamp"])
 
     # Parse actual rate or infer pair
     actual_rate = _parse_actual(actual_input)
@@ -277,63 +273,66 @@ if run:
         }
         st.table(pd.DataFrame(metrics_table))
 
-# --- Visuals ---
-st.markdown("### 📈 Visuals")
-if "Predicted_Rate" in audited.columns and "Live_Rate" in audited.columns:
-    st.line_chart(audited[["Predicted_Rate", "Live_Rate"]])
-if "CorrectDecision" in audited.columns:
-    st.bar_chart(audited["CorrectDecision"].value_counts())
-if "HelpfulOutcome" in audited.columns:
-    st.bar_chart(audited["HelpfulOutcome"].value_counts())
+        # --- Visuals ---
+        st.markdown("### 📈 Visuals")
+        if "Predicted_Rate" in audited.columns and "Live_Rate" in audited.columns:
+            st.line_chart(audited[["Predicted_Rate", "Live_Rate"]])
+        if "CorrectDecision" in audited.columns:
+            st.bar_chart(audited["CorrectDecision"].value_counts())
+        if "HelpfulOutcome" in audited.columns:
+            st.bar_chart(audited["HelpfulOutcome"].value_counts())
 
-# --- Rolling Accuracy ---
-st.markdown("### 📈 Rolling Accuracy (7-day window)")
-if "CorrectDecision" in audited.columns and "Timestamp" in audited.columns:
-    df_acc = audited.copy()
-    df_acc["Timestamp"] = pd.to_datetime(df_acc["Timestamp"])
-    df_acc = df_acc.sort_values("Timestamp")
-    df_acc["RollingAccuracy"] = (
-        df_acc["CorrectDecision"].astype(int).rolling(window=7, min_periods=1).mean()
-    )
-    st.line_chart(df_acc.set_index("Timestamp")["RollingAccuracy"])
+        # --- Rolling Accuracy ---
+        st.markdown("### 📈 Rolling Accuracy (7-day window)")
+        if "CorrectDecision" in audited.columns and "Timestamp" in audited.columns:
+            df_acc = audited.copy()
+            df_acc["Timestamp"] = pd.to_datetime(df_acc["Timestamp"])
+            df_acc = df_acc.sort_values("Timestamp")
+            df_acc["RollingAccuracy"] = (
+                df_acc["CorrectDecision"].astype(int).rolling(window=7, min_periods=1).mean()
+            )
+            st.line_chart(df_acc.set_index("Timestamp")["RollingAccuracy"])
 
-# --- Error Distribution ---
-st.markdown("### 📊 Error Distribution")
-if "Error" in audited.columns:
-    st.bar_chart(audited["Error"].round(4).value_counts().sort_index())
+        # --- Error Distribution ---
+        st.markdown("### 📊 Error Distribution")
+        if "Error" in audited.columns:
+            st.bar_chart(audited["Error"].round(4).value_counts().sort_index())
 
-# --- Weighted Accuracy (if Notional column exists) ---
-if "Notional" in audited.columns and "CorrectDecision" in audited.columns:
-    weighted_acc = (
-        (audited["CorrectDecision"].astype(int) * audited["Notional"]).sum()
-        / audited["Notional"].sum()
-    )
-    st.metric("Value-Weighted Accuracy", f"{weighted_acc:.2%}")
+        # --- Weighted Accuracy (if Notional column exists) ---
+        if "Notional" in audited.columns and "CorrectDecision" in audited.columns:
+            weighted_acc = (
+                (audited["CorrectDecision"].astype(int) * audited["Notional"]).sum()
+                / audited["Notional"].sum()
+            )
+            st.metric("Value-Weighted Accuracy", f"{weighted_acc:.2%}")
 
-# --- Detailed Findings ---
-st.markdown("### 🔍 Detailed Findings")
-if "Error" in audited.columns:
-    top_errors = audited.nlargest(5, "Error")
-    st.write("Top 5 largest prediction errors:")
-    st.dataframe(top_errors)
+        # --- Detailed Findings ---
+        st.markdown("### 🔍 Detailed Findings")
+        if "Error" in audited.columns:
+            top_errors = audited.nlargest(5, "Error")
+            st.write("Top 5 largest prediction errors:")
+            st.dataframe(top_errors)
 
-# --- Data Preview ---
-st.markdown("### 📂 Data Preview")
-st.dataframe(audited.head(show_preview_rows))
+        # --- Data Preview ---
+        st.markdown("### 📂 Data Preview")
+        st.dataframe(audited.head(show_preview_rows))
 
-# --- Download CSV ---
-csv_bytes = audited.to_csv(index=False).encode("utf-8")
-st.download_button("Download audited CSV", data=csv_bytes,
-                   file_name="audited.csv", mime="text/csv")
+        # --- Download CSV ---
+        csv_bytes = audited.to_csv(index=False).encode("utf-8")
+        st.download_button("Download audited CSV", data=csv_bytes,
+                           file_name="audited.csv", mime="text/csv")
 
-# --- Download PDF Report ---
-pdf_bytes = build_pdf_report(base, quote, actual_rate, summary, audited)
-st.download_button("Download PDF Report", data=pdf_bytes,
-                   file_name="hedge_audit_report.pdf", mime="application/pdf")
+        # --- Download PDF Report ---
+        pdf_bytes = build_pdf_report(base, quote, actual_rate, summary, audited)
+        st.download_button("Download PDF Report", data=pdf_bytes,
+                           file_name="hedge_audit_report.pdf", mime="application/pdf")
 
-# --- Appendix ---
-st.markdown("---")
-st.markdown("### 📎 Appendix")
-st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · "
-           f"Generated: {datetime.now(timezone.utc).isoformat()}Z")
-st.caption(f"Options → Infer Pair: {infer_pair}, Use Yesterday: {use_yesterday}")
+        # --- Appendix ---
+        st.markdown("---")
+        st.markdown("### 📎 Appendix")
+        st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · "
+                   f"Generated: {datetime.now(timezone.utc).isoformat()}Z")
+        st.caption(f"Options → Infer Pair: {infer_pair}, Use Yesterday: {use_yesterday}")
+
+
+  
