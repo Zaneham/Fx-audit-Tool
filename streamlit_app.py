@@ -135,3 +135,19 @@ if run:
 
     st.markdown("---")
     st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · Generated: {datetime.utcnow().isoformat()}Z")
+
+    # Only show results if audit succeeded
+if "summary" in locals() and "audited" in locals():
+    st.success("Audit complete")
+    st.markdown("### Summary")
+    st.json(summary)
+
+    st.markdown("### Preview")
+    st.dataframe(audited.head(show_preview_rows))
+
+    csv_bytes = audited.to_csv(index=False).encode("utf-8")
+    st.download_button("Download audited CSV", data=csv_bytes, file_name="audited.csv", mime="text/csv")
+
+    st.markdown("---")
+    st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · Generated: {datetime.utcnow().isoformat()}Z")
+
