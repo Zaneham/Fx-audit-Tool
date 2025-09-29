@@ -80,8 +80,9 @@ Live_Rate: Actual observed market rate
 Decision: Hedge or No Hedge
 
 Pair: Currency pair (e.g. NZD/USD)
----
+
 ##🛠️ Tech Stack
+---
 Python (pandas, numpy, matplotlib)
 
 Streamlit for interactive UI
@@ -89,8 +90,9 @@ Streamlit for interactive UI
 FPDF for PDF report generation
 
 Docker & Streamlit Cloud ready for deployment
----
+
 ##📊 Use Cases
+---
 Corporate Treasury: Test hedge effectiveness and document compliance (IFRS 9).
 
 Trading & Risk: Back‑test predictive models and stress‑test strategies.
@@ -98,8 +100,9 @@ Trading & Risk: Back‑test predictive models and stress‑test strategies.
 Education: Teach hedging, forecasting, and error metrics in a hands‑on way.
 
 General Decision Auditing: Adaptable to any binary decision based on forecasts (energy, supply chain, etc.).
----
+
 ##📦 Roadmap
+---
 Multi‑pair summary tables
 
 Expanded provider fallback logic
@@ -107,7 +110,7 @@ Expanded provider fallback logic
 Interactive parameter tuning (thresholds, rolling windows)
 
 Cloud‑ready demo with one‑click sample run
----
-##Author
 
+##Author
+---
 built by Zane
