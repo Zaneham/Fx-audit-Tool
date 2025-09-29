@@ -26,6 +26,35 @@ from fpdf import FPDF
 st.set_page_config(page_title="Hedge Audit Demo", layout="wide")
 st.title("Hedge Audit Demo")
 
+# --- Landing description ---
+st.markdown(
+    """
+Welcome to the **Hedge Audit Demo** 🎯
+
+Upload a CSV of hedge decisions and this tool will:
+- Validate the file structure
+- Fetch or use the actual FX rate
+- Compare predicted vs live rates
+- Generate accuracy metrics, charts, and a professional report
+
+👉 If you just want to see it in action, click **Run Demo** below — no setup required.
+"""
+)
+
+# --- Demo button (auto-load sample and run) ---
+if st.button("Run Demo"):
+    try:
+        sample_df = pd.read_csv("tests/sample_files/good.csv")
+        st.session_state["_sample_df"] = sample_df
+        # trigger audit automatically
+        run = True
+        st.info("Running demo with bundled sample CSV...")
+    except Exception as e:
+        st.error(f"Failed to load demo sample: {e}")
+
+
+
+
 with st.sidebar:
     st.header("Options")
     infer_pair = st.checkbox("Infer currency pair from file (if no Pair column)", value=True)
