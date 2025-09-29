@@ -113,7 +113,7 @@ if run:
         else:
             _display_error("No actual rate provided and base/quote currencies are missing.")
 
-       actual_rate = _cached_fetch_rate(base, quote, use_yesterday)
+actual_rate = _cached_fetch_rate(base, quote, use_yesterday)
 if actual_rate is None:
     fallback_rate = 0.6123 if (base, quote) == ("NZD", "USD") else None
     if fallback_rate:
@@ -121,6 +121,8 @@ if actual_rate is None:
         actual_rate = fallback_rate
     else:
         _display_error(f"Rate provider returned no rate for {base}/{quote}, and no fallback is available.")
+
+
 
 
     # Run audit
