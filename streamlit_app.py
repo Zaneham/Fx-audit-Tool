@@ -169,7 +169,8 @@ Key Finding:
     return pdf.output(dest="S").encode("latin-1")
 
 
-# --- Friendly Schema Validator ---
+# more Friendly Schema Validator 
+
 
 def validate_schema(df):
     """
@@ -177,6 +178,7 @@ def validate_schema(df):
     - Requires only core columns
     - Accepts optional extras
     - Aliases CorrectDecision -> Decision if needed
+    - Ensures CorrectDecision is numeric (0/1)
     - Fills missing optional columns with None
     """
 
@@ -191,6 +193,19 @@ def validate_schema(df):
     # Alias mapping: if CorrectDecision exists but Decision doesn't, create it
     if "CorrectDecision" in df.columns and "Decision" not in df.columns:
         df["Decision"] = df["CorrectDecision"].map({1: "Correct", 0: "Incorrect"})
+
+    # If Decision exists but CorrectDecision doesn't, create numeric version
+    if "Decision" in df.columns and "CorrectDecision" not in df.columns:
+        df["CorrectDecision"] = df["Decision"].map({"Correct": 1, "Incorrect": 0})
+
+    # Ensure CorrectDecision is numeric (handles None, NaN, strings)
+    if "CorrectDecision" in df.columns:
+        df["CorrectDecision"] = (
+            pd.to_numeric(df["CorrectDecision"], errors="coerce")
+              .fillna(0)
+              .replace({None: 0})
+              .astype(int)
+        )
 
     # Add placeholders for any missing optional columns
     for col in optional:
@@ -207,6 +222,7 @@ def validate_schema(df):
         )
 
     return df
+
 
 
 # --- Main audit logic ---
