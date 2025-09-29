@@ -1,107 +1,596 @@
-# validators.py
+# streamlit_app.py
 # -*- coding: utf-8 -*-
 """
-Validation and pair inference helpers for Hedge Audit Demo
+Streamlit front-end for Hedge Audit Demo
 """
 
-from typing import List, Optional, Tuple
-import re
+import os
+import sys
+import io
+import random
+import datetime
+
+
+# Ensure repository root (folder containing this file) is on sys.path
+ROOT = os.path.abspath(os.path.dirname(__file__))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+import streamlit as st
 import pandas as pd
 
-REQUIRED_COLUMNS = ["Timestamp", "Predicted_Rate", "Live_Rate", "Decision"]
+from validators import infer_pair_from_df_or_filename, validate_schema
+from audit.evaluator import evaluate_dataframe
+from audit.summary import compute_summary
+from ingest.rate_fetcher import fetch_actual_rate
+from fpdf import FPDF
+import matplotlib.pyplot as plt
+import tempfile
 
-_FILENAME_PAIR_REGEXES = [
-    re.compile(r"([A-Za-z]{3})[_-]?([A-Za-z]{3})", re.IGNORECASE),   # nzdusd, nzd_usd, NZD-USD
-    re.compile(r"([A-Za-z]{3})/([A-Za-z]{3})", re.IGNORECASE),       # NZD/USD
-]
+st.set_page_config(page_title="Hedge Audit Demo", layout="wide")
+st.title("Hedge Audit Demo")
 
-
-def validate_schema(df: pd.DataFrame) -> Tuple[bool, List[str]]:
+# --- Landing description ---
+st.markdown(
     """
-    Check that required columns are present (case/space tolerant).
-    Returns (ok, missing_columns).
-    """
-    cols_norm = {c.strip().lower().replace(" ", "_"): c for c in df.columns}
-    missing = []
-    for req in REQUIRED_COLUMNS:
-        key = req.strip().lower().replace(" ", "_")
-        if key not in cols_norm:
-            missing.append(req)
-    return (len(missing) == 0, missing)
+Welcome to the **Hedge Audit Demo** 🎯
 
+Upload a CSV of hedge decisions and this tool will:
+- Validate the file structure
+- Fetch or use the actual FX rate
+- Compare predicted vs live rates
+- Generate accuracy metrics, charts, and a professional pdf report
 
-def _normalize_pair_tuple(a: str, b: str) -> Tuple[str, str]:
-    return (a.upper().strip(), b.upper().strip())
+👉 If you just want to see it in action, click **Run Demo** below — no setup required.
+"""
+)
 
+# --- Synthetic demo data generator ---
+def generate_eur_usd_sample(rows=100):
+    start = datetime.date(2024, 1, 1)
+    data = []
+    for i in range(rows):
+        date = start + datetime.timedelta(days=i)
+        timestamp = date.isoformat()  # YYYY-MM-DD
+        pred = round(1.10 + random.uniform(-0.01, 0.01), 5)
+        live = round(pred + random.uniform(-0.004, 0.004), 5)
+        error = round(live - pred, 5)
+        correct = 1 if abs(error) < 0.002 else 0
+        helpful = correct
+        notional = random.choice([50000, 100000, 250000, 500000])
+        data.append([timestamp, "EUR", "USD", pred, live, error, correct, helpful, notional])
 
-def _parse_pair_string(s: str) -> Optional[Tuple[str, str]]:
-    """Parse strings like NZDUSD, NZD_USD, NZD-USD, NZD/USD, 'NZD USD'."""
-    s = s.strip()
-    # common separators
-    for sep in [" ", "_", "-", "/"]:
-        if sep in s:
-            parts = [p for p in re.split(r"[_\-/\s]+", s) if p]
-            if len(parts) >= 2 and all(len(p) == 3 for p in parts[:2]):
-                return _normalize_pair_tuple(parts[0], parts[1])
+    return pd.DataFrame(data, columns=[
+        "Timestamp","Base","Quote","Predicted_Rate","Live_Rate",
+        "Error","CorrectDecision","HelpfulOutcome","Notional"
+    ])
 
-    # contiguous 6-letter code e.g., nzdusd or NZDUSD
-    m = re.match(r"^([A-Za-z]{6})$", s)
-    if m:
-        code = m.group(1)
-        return _normalize_pair_tuple(code[:3], code[3:6])
+# --- Demo button (auto-load synthetic sample and run) ---
+if st.button("Run Demo"):
+    try:
+        sample_df = generate_eur_usd_sample(100)
+        st.session_state["_sample_df"] = sample_df
+        run = True
+        st.info("Running demo with synthetic EUR/USD sample data...")
+    except Exception as e:
+        st.error(f"Failed to load demo sample: {e}")
 
-    # try regex search inside string (for filenames)
-    for rx in _FILENAME_PAIR_REGEXES:
-        m = rx.search(s)
-        if m:
-            a, b = m.group(1), m.group(2)
-            if len(a) == 3 and len(b) == 3:
-                return _normalize_pair_tuple(a, b)
+with st.sidebar:
+    st.header("Options")
+    infer_pair = st.checkbox("Infer currency pair from file (if no Pair column)", value=True)
+    use_yesterday = st.checkbox("Use yesterday 23:59 UTC for rate fetch (avoid midnight ambiguity)", value=True)
+    show_preview_rows = st.slider("Preview rows", min_value=5, max_value=200, value=50, step=5)
+    st.markdown("---")
+    st.markdown("Sample CSV: header should include")
+    st.code("Timestamp,Predicted_Rate,Live_Rate,Decision,Pair")
 
-    return None
+uploaded = st.file_uploader("Upload hedge CSV", type=["csv"])
+col1, col2 = st.columns([2, 1])
 
+with col1:
+    actual_input = st.text_input(
+        "Actual rate (optional)",
+        help="Enter a numeric rate (e.g., 0.61123). Leave blank to fetch by pair."
+    )
+    base = st.text_input("Base currency (optional)", max_chars=3, help="Use ISO code like NZD")
+    quote = st.text_input("Quote currency (optional)", max_chars=3, help="Use ISO code like USD")
+    run = st.button("Run audit")
 
-def infer_pair_from_df_or_filename(df: pd.DataFrame, filename: Optional[str] = None) -> Tuple[str, str]:
-    """
-    Attempt to infer currency pair in priority:
-      1) Explicit Base/Quote columns
-      2) 'Pair' column (first non-null entry like 'NZD/USD' or 'nzdusd')
-      3) Filename patterns (nzdusd, nzd_usd, NZD-USD, NZD/USD)
-    Returns (BASE, QUOTE) or raises RuntimeError if nothing can be inferred.
-    """
+with col2:
+    st.markdown("Quick actions")
+    if st.button("Load sample CSV"):
+        try:
+            sample_df = generate_eur_usd_sample(50)
+            st.session_state["_sample_df"] = sample_df
+            st.success("Synthetic EUR/USD sample loaded (use Run audit to execute).")
+        except Exception as e:
+            st.error(f"Failed to load sample: {e}")
 
-    # 1) Prefer explicit Base/Quote columns
-    if "Base" in df.columns and "Quote" in df.columns:
-        return (
-            str(df["Base"].iloc[0]).strip().upper(),
-            str(df["Quote"].iloc[0]).strip().upper(),
+def _parse_actual(text: str):
+    try:
+        if text is None or str(text).strip() == "":
+            return None
+        return float(str(text).strip())
+    except Exception:
+        return None
+
+def _display_error(msg: str):
+    st.error(msg)
+    raise RuntimeError(msg)
+
+@st.cache_data(ttl=60 * 60)
+def _cached_fetch_rate(base: str, quote: str, use_yesterday_flag: bool):
+    b = (base or "").upper().strip()
+    q = (quote or "").upper().strip()
+
+    # --- Currency validation guardrail ---
+    SUPPORTED = {
+        "USD","EUR","GBP","JPY","AUD","NZD","CAD","CHF",
+        "SEK","NOK","CNY","HKD","SGD"  # extend as needed
+    }
+    if b not in SUPPORTED or q not in SUPPORTED:
+        _display_error(
+            f"Unsupported currency pair: {b}/{q}. "
+            f"Please use valid ISO codes like EUR/USD."
         )
 
-    # 2) Try Pair column
-    if "Pair" in df.columns:
-        col = df["Pair"].dropna().astype(str)
-        if not col.empty:
-            parsed = _parse_pair_string(col.iloc[0].strip())
-            if parsed:
-                return parsed
+    # --- Normal provider call ---
+    return fetch_actual_rate(b, q, as_of_yesterday=use_yesterday_flag)
 
-    # 3) Try other possible pair columns
-    for alt in ["pair", "currency_pair", "pair_name"]:
-        if alt in (c.lower() for c in df.columns):
-            series = df[[c for c in df.columns if c.lower() == alt][0]].dropna().astype(str)
-            if not series.empty:
-                parsed = _parse_pair_string(series.iloc[0].strip())
-                if parsed:
-                    return parsed
+def build_pdf_report(base, quote, actual_rate, summary, audited):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(200, 10, "Hedge Audit Report", ln=True, align="C")
 
-    # 4) Try filename
-    if filename:
-        parsed = _parse_pair_string(filename)
-        if parsed:
-            return parsed
+    pdf.set_font("Arial", "I", 12)
+    pdf.cell(200, 10, "Generated by Zane's Hedge Audit Demo", ln=True, align="C")
 
-    # If nothing worked, raise instead of silently defaulting
-    raise RuntimeError(
-        "Could not infer currency pair. Please untick 'Infer currency pair from file' "
-        "and specify Base/Quote manually."
-    )
+    pdf.set_font("Arial", "", 12)
+    pdf.ln(10)
+    pdf.cell(200, 10, f"Currency Pair: {base}/{quote}", ln=True)
+    pdf.cell(200, 10, f"Rate Used: {actual_rate}", ln=True)
+    pdf.cell(200, 10, f"Rows Audited: {len(audited)}", ln=True)
+
+    pdf.ln(10)
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(200, 10, "Executive Summary", ln=True)
+    pdf.set_font("Arial", "", 12)
+
+    exec_summary = f"""
+Prediction Accuracy: {summary.get('prediction_accuracy')}
+RMSE: {summary.get('rmse')}
+Recall %: {summary.get('recall_perc')}
+Coverage: {summary.get('percent_profiled')}
+
+Key Finding:
+{summary.get('key_finding', 'No key finding generated.')}
+"""
+    pdf.multi_cell(0, 10, exec_summary)
+
+    # --- Insert chart: Predicted vs Live ---
+    if "Predicted_Rate" in audited.columns and "Live_Rate" in audited.columns:
+        fig, ax = plt.subplots()
+        audited[["Predicted_Rate", "Live_Rate"]].plot(ax=ax)
+        ax.set_title("Predicted vs Live Rates")
+        ax.set_xlabel("Index")
+        ax.set_ylabel("Rate")
+        fig.tight_layout()
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+            fig.savefig(tmpfile.name, format="png")
+            chart_path = tmpfile.name
+
+        plt.close(fig)
+        pdf.image(chart_path, x=10, w=190)
+        os.remove(chart_path)
+
+    pdf.ln(10)
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(200, 10, "Appendix", ln=True)
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(200, 10, f"Generated: {datetime.now(timezone.utc).isoformat()}", ln=True)
+
+    return pdf.output(dest="S").encode("latin-1")
+
+
+# more Friendly Schema Validator 
+
+
+# --- Friendly Schema Validator ---
+def validate_schema(df):
+    """
+    Friendly schema validator:
+    - Requires only core columns
+    - Accepts optional extras
+    - Aliases CorrectDecision -> Decision if needed
+    - Ensures CorrectDecision is numeric (0/1)
+    - Cleans Notional column to numeric (defaults to 0 if missing/invalid)
+    - Fills missing optional columns with None
+    """
+
+    required = {"Timestamp", "Predicted_Rate", "Live_Rate"}
+    optional = {"Decision", "CorrectDecision", "HelpfulOutcome", "Notional"}
+
+    # Check required
+    missing = required - set(df.columns)
+    if missing:
+        raise RuntimeError(f"CSV missing required columns: {', '.join(missing)}")
+
+    # Alias mapping: if CorrectDecision exists but Decision doesn't, create it
+    if "CorrectDecision" in df.columns and "Decision" not in df.columns:
+        df["Decision"] = df["CorrectDecision"].map({1: "Correct", 0: "Incorrect"})
+
+    # If Decision exists but CorrectDecision doesn't, create numeric version
+    if "Decision" in df.columns and "CorrectDecision" not in df.columns:
+        df["CorrectDecision"] = df["Decision"].map({"Correct": 1, "Incorrect": 0})
+
+    # Ensure CorrectDecision is numeric (handles None, NaN, strings)
+    if "CorrectDecision" in df.columns:
+        df["CorrectDecision"] = (
+            pd.to_numeric(df["CorrectDecision"], errors="coerce")
+              .fillna(0)
+              .replace({None: 0})
+              .astype(int)
+        )
+
+    # Clean Notional column if present
+    if "Notional" in df.columns:
+        df["Notional"] = pd.to_numeric(df["Notional"], errors="coerce").fillna(0)
+
+    # Add placeholders for any missing optional columns
+    for col in optional:
+        if col not in df.columns:
+            df[col] = None
+
+    # Warn if optional columns are missing
+    missing_optional = optional - set(df.columns)
+    if missing_optional:
+        import streamlit as st
+        st.warning(
+            f"Some optional columns are missing: {', '.join(missing_optional)}. "
+            "Charts may be limited, but the app will still run."
+        )
+
+    return df
+
+
+
+
+# --- Main audit logic ---
+if run:
+    audit_success = False
+    summary = None
+    audited = None
+    df = None
+    filename = None
+
+    # Load DataFrame
+    if "_sample_df" in st.session_state and st.session_state.get("_sample_df") is not None and uploaded is None:
+        df = st.session_state["_sample_df"]
+        filename = "sample.csv"
+    elif uploaded is not None:
+        try:
+            uploaded.seek(0)
+            df = pd.read_csv(io.BytesIO(uploaded.read()))
+            filename = getattr(uploaded, "name", "uploaded.csv") or "uploaded.csv"
+        except Exception as e:
+            _display_error(f"Failed to parse uploaded CSV: {e}")
+    else:
+        _display_error("Please upload a CSV or load the sample CSV.")
+
+    # Validate schema (friendly mode with fallback)
+    try:
+        df = validate_schema(df)
+    except RuntimeError as e:
+        st.warning(f"{e} — falling back to sample NZD/AUD dataset for demo.")
+        # --- Fallback sample dataset ---
+        np.random.seed(42)
+        n = 30
+        dates = pd.date_range("2024-01-01", periods=n, freq="D")
+        pred = 0.93 + np.cumsum(np.random.normal(0, 0.002, n))
+        live = pred + np.random.normal(0.001, 0.0025, n)
+        correct_decision = (np.sign(np.diff(pred, prepend=pred[0])) ==
+                            np.sign(np.diff(live, prepend=live[0]))).astype(int)
+        df = pd.DataFrame({
+            "Timestamp": dates.strftime("%Y-%m-%d"),
+            "Predicted_Rate": np.round(pred, 5),
+            "Live_Rate": np.round(live, 5),
+            "Decision": np.where(correct_decision == 1, "Correct", "Incorrect"),
+            "CorrectDecision": correct_decision,
+            "HelpfulOutcome": ((correct_decision == 1) & (np.abs(live - pred) < 0.004)).astype(int),
+            "Notional": np.random.choice([50_000, 100_000, 250_000], size=n)
+        })
+        filename = "fallback_nzd_aud.csv"
+
+    # --- Normalize Decision column ---
+    if "Decision" in df.columns and "CorrectDecision" not in df.columns:
+        df["CorrectDecision"] = df["Decision"].map(
+            {"Correct": 1, "Incorrect": 0}
+        )
+
+    # Normalize Timestamp column automatically
+    if "Timestamp" in df.columns:
+        df["Timestamp"] = df["Timestamp"].astype(str).str.strip()
+        parsed = pd.to_datetime(df["Timestamp"], format="%Y-%m-%d", errors="coerce")
+        if parsed.isna().any():
+            parsed = pd.to_datetime(df["Timestamp"], errors="coerce", dayfirst=False)
+        df["Timestamp"] = parsed
+
+        # Count bad rows
+        bad_rows = df["Timestamp"].isna().sum()
+        if bad_rows > 0:
+            st.warning(f"{bad_rows} rows had invalid or unrecognized dates and were excluded.")
+            df = df.dropna(subset=["Timestamp"])
+
+    # Parse actual rate or infer pair
+    actual_rate = _parse_actual(actual_input)
+
+    base = (base or "").upper().strip()
+    quote = (quote or "").upper().strip()
+
+    if actual_rate is None:
+        if base and quote:
+            pass
+        elif infer_pair:
+            try:
+                pair = infer_pair_from_df_or_filename(df, filename)
+                if not pair or len(pair) != 2:
+                    _display_error(f"Failed to infer pair: invalid pair returned: {pair}")
+                base, quote = pair[0].upper().strip(), pair[1].upper().strip()
+            except Exception as e:
+                _display_error(f"Failed to infer pair: {e}")
+        else:
+            _display_error("No actual rate provided and base/quote currencies are missing.")
+
+        if not base or not quote:
+            _display_error("Base or quote currency is empty after inference; cannot fetch rate.")
+
+        actual_rate = _cached_fetch_rate(base, quote, use_yesterday)
+        if actual_rate is None:
+            fallback_rate = 0.6123 if (base, quote) == ("NZD", "USD") else None
+            if fallback_rate is not None:
+                st.warning(f"Using fallback rate for {base}/{quote}: {fallback_rate}")
+                actual_rate = fallback_rate
+            else:
+                _display_error(f"Rate provider returned no rate for {base}/{quote}, and no fallback is available.")
+
+    # Run audit
+    try:
+        with st.spinner("Fetching rate and evaluating..."):
+            audited = evaluate_dataframe(df, actual_rate=actual_rate, fill_missing_only=True)
+            summary = compute_summary(audited, by_pair=True)
+            audit_success = True
+    except Exception as e:
+        st.error(f"Unexpected error during audit: {e}")
+        audit_success = False
+        raise
+
+    # Display results
+    if audit_success:
+        st.success("Audit complete")
+
+        # --- Cover / Header ---
+        st.markdown("## 📑 Hedge Audit Report")
+        st.markdown(f"**Currency Pair:** {base}/{quote}")
+        st.markdown(f"**Audit Date:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        st.markdown(f"**Rows Audited:** {len(audited)}")
+        st.markdown(f"**Rate Used:** {actual_rate}")
+
+        st.markdown("---")
+
+        # --- Executive Summary (dynamic generator) ---
+        st.markdown("### 📝 Executive Summary")
+
+        acc = summary.get("prediction_accuracy")
+        rmse = summary.get("rmse")
+        recall = summary.get("recall_perc")
+        coverage = summary.get("percent_profiled")
+
+        insights = []
+        if acc is not None:
+            if acc >= 0.9:
+                insights.append("The model achieved very high accuracy, closely tracking market moves.")
+            elif acc >= 0.75:
+                insights.append("The model captured most market moves, though some deviations remain.")
+            else:
+                insights.append("The model struggled to consistently align with market moves.")
+
+        if rmse is not None:
+            if rmse < 0.02:
+                insights.append("Prediction errors were minimal, indicating strong rate stability.")
+            elif rmse < 0.05:
+                insights.append("Prediction errors were moderate, suggesting room for refinement.")
+            else:
+                insights.append("Prediction errors were relatively large, pointing to instability.")
+
+        if recall is not None:
+            if recall >= 0.8:
+                insights.append("The model successfully identified most of the key opportunities.")
+            elif recall >= 0.5:
+                insights.append("The model caught some opportunities but missed others.")
+            else:
+                insights.append("The model missed many opportunities, limiting practical usefulness.")
+
+        if coverage is not None:
+            if coverage >= 0.9:
+                insights.append("Coverage was broad, ensuring decisions were made across nearly all cases.")
+            elif coverage >= 0.7:
+                insights.append("Coverage was reasonable, though some cases were skipped.")
+            else:
+                insights.append("Coverage was limited, reducing the model’s applicability.")
+
+        if not insights:
+            insights.append("Insufficient data to generate a clear finding.")
+
+        key_finding = " ".join(insights)
+        summary["key_finding"] = key_finding
+
+      
+
+
+        st.write({
+            "Prediction Accuracy": acc,
+            "RMSE": rmse,
+            "Recall %": recall,
+            "Coverage": coverage,
+            "Key Finding": key_finding
+        })
+
+            # --- Rolling Accuracy (safe cast) ---
+        if "CorrectDecision" in audited.columns:
+            df_acc = audited.copy()
+            df_acc["CorrectDecision"] = (
+                pd.to_numeric(df_acc["CorrectDecision"], errors="coerce")
+                  .fillna(0)
+                  .astype(int)
+            )
+            df_acc["RollingAccuracy"] = (
+                df_acc["CorrectDecision"].rolling(window=7, min_periods=1).mean()
+            )
+
+            st.line_chart(df_acc[["RollingAccuracy"]])
+            st.caption("🔹 Rolling 7‑day Accuracy — shows how consistent the model’s decisions were over time.")
+
+      
+           # --- Key Metrics Table ---
+        st.markdown("### 📊 Key Metrics")
+        metrics_table = {
+            "Prediction Accuracy": [summary.get("prediction_accuracy")],
+            "RMSE": [summary.get("rmse")],
+            "Recall %": [summary.get("recall_perc")],
+            "% Missing Actuals": [summary.get("percent_missing_actual")],
+            "% Profiled": [summary.get("percent_profiled")]
+        }
+        st.table(pd.DataFrame(metrics_table))
+
+        # --- Visuals ---
+        st.markdown("### 📈 Visuals")
+
+        import altair as alt
+
+        if {"Predicted_Rate", "Live_Rate"}.issubset(audited.columns):
+            audited = audited.copy()
+            audited["Day"] = range(1, len(audited) + 1)
+
+            # Calculate min/max for dynamic y-axis zoom
+            y_min = audited[["Predicted_Rate", "Live_Rate"]].min().min()
+            y_max = audited[["Predicted_Rate", "Live_Rate"]].max().max()
+
+            # Comparison chart
+            line_chart = (
+                alt.Chart(audited)
+                .mark_line(point=True)
+                .encode(
+                    x=alt.X("Day:O", title="Day"),
+                    y=alt.Y(
+                        "value:Q",
+                        title="Rate",
+                        axis=alt.Axis(format=".3f"),
+                        scale=alt.Scale(domain=[y_min - 0.002, y_max + 0.002])
+                    ),
+                    color=alt.Color("variable:N", title="Series")
+                )
+                .transform_fold(
+                    ["Predicted_Rate", "Live_Rate"],
+                    as_=["variable", "value"]
+                )
+                .properties(width=600, height=300, title="Predicted vs Live Rates")
+            )
+            st.altair_chart(line_chart, use_container_width=True)
+            st.caption("🔹 Predicted vs Live Rates — shows how closely the model tracks actual NZD/AUD market moves.")
+
+            # Difference chart
+            audited["Diff"] = audited["Live_Rate"] - audited["Predicted_Rate"]
+            diff_chart = (
+                alt.Chart(audited)
+                .mark_line(point=True, color="red")
+                .encode(
+                    x=alt.X("Day:O", title="Day"),
+                    y=alt.Y("Diff:Q", title="Live - Predicted", axis=alt.Axis(format=".3f"))
+                )
+                .properties(width=600, height=300, title="Prediction Error Over Time")
+            )
+            st.altair_chart(diff_chart, use_container_width=True)
+            st.caption("🔹 Prediction Error — highlights the size and direction of differences between predicted and live rates.")
+
+        if "CorrectDecision" in audited.columns:
+            st.bar_chart(audited["CorrectDecision"].value_counts())
+            st.caption("🔹 Correct Decisions — shows how often the model’s directional calls were right vs wrong.")
+
+        if "HelpfulOutcome" in audited.columns:
+            st.bar_chart(audited["HelpfulOutcome"].value_counts())
+            st.caption("🔹 Helpful Outcomes — shows how often correct decisions were also practically useful.")
+
+
+
+
+        # --- Rolling Accuracy ---
+        st.markdown("### 📈 Rolling Accuracy (7-day window)")
+        if "CorrectDecision" in audited.columns and "Timestamp" in audited.columns:
+            df_acc = audited.copy()
+            df_acc["Timestamp"] = pd.to_datetime(df_acc["Timestamp"])
+            df_acc = df_acc.sort_values("Timestamp")
+            df_acc["RollingAccuracy"] = (
+                df_acc["CorrectDecision"].astype(int).rolling(window=7, min_periods=1).mean()
+            )
+            st.line_chart(df_acc.set_index("Timestamp")["RollingAccuracy"])
+
+        # --- Error Distribution ---
+        st.markdown("### 📊 Error Distribution")
+        if "Error" in audited.columns:
+            st.bar_chart(audited["Error"].round(4).value_counts().sort_index())
+
+        # --- Weighted Accuracy (if Notional column exists) ---
+        if "Notional" in audited.columns and "CorrectDecision" in audited.columns:
+            total_notional = audited["Notional"].sum()
+            if total_notional > 0:
+                weighted_acc = (
+                    (audited["CorrectDecision"].astype(int) * audited["Notional"]).sum()
+                    / total_notional
+                )
+                st.metric("Value-Weighted Accuracy", f"{weighted_acc:.2%}")
+            else:
+                st.warning("Notional values sum to zero — cannot compute weighted accuracy.")
+
+        # --- Detailed Findings ---
+        st.markdown("### 🔍 Detailed Findings")
+        if "Error" in audited.columns:
+            top_errors = audited.nlargest(5, "Error")
+            st.write("Top 5 largest prediction errors:")
+            st.dataframe(top_errors)
+
+        # --- Data Preview ---
+        st.markdown("### 📂 Data Preview")
+        st.dataframe(audited.head(show_preview_rows))
+
+        # --- Download CSV ---
+        csv_bytes = audited.to_csv(index=False).encode("utf-8")
+        st.download_button("Download audited CSV", data=csv_bytes,
+                           file_name="audited.csv", mime="text/csv")
+
+               # --- PDF Export ---
+        
+        pdf_bytes = build_pdf_report(base, quote, actual_rate, summary, audited)
+
+        # Streamlit download button
+        st.download_button(
+            "Download PDF Report",
+            data=pdf_bytes,
+            file_name="hedge_audit_report.pdf",
+            mime="application/pdf"
+        )
+
+
+                                  
+
+
+        # --- Appendix ---
+        st.markdown("---")
+        st.markdown("### 📎 Appendix")
+        st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · "
+                   f"Generated: {datetime.now(timezone.utc).isoformat()}Z")
+        st.caption(f"Options → Infer Pair: {infer_pair}, Use Yesterday: {use_yesterday}")
+
+
+  
