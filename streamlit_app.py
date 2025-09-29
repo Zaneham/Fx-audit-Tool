@@ -7,6 +7,8 @@ Streamlit front-end for Hedge Audit Demo
 import os
 import sys
 import io
+import random
+import datetime
 from datetime import datetime, timezone
 
 # Ensure repository root (folder containing this file) is on sys.path
@@ -25,12 +27,8 @@ from fpdf import FPDF
 import matplotlib.pyplot as plt
 import tempfile
 
-
-
-
 st.set_page_config(page_title="Hedge Audit Demo", layout="wide")
 st.title("Hedge Audit Demo")
-
 
 # --- Landing description ---
 st.markdown(
@@ -47,17 +45,35 @@ Upload a CSV of hedge decisions and this tool will:
 """
 )
 
-# --- Demo button (auto-load sample and run) ---
+# --- Synthetic demo data generator ---
+def generate_eur_usd_sample(rows=100):
+    start = datetime.date(2024, 1, 1)
+    data = []
+    for i in range(rows):
+        date = start + datetime.timedelta(days=i)
+        timestamp = date.isoformat()  # YYYY-MM-DD
+        pred = round(1.10 + random.uniform(-0.01, 0.01), 5)
+        live = round(pred + random.uniform(-0.004, 0.004), 5)
+        error = round(live - pred, 5)
+        correct = 1 if abs(error) < 0.002 else 0
+        helpful = correct
+        notional = random.choice([50000, 100000, 250000, 500000])
+        data.append([timestamp, "EUR", "USD", pred, live, error, correct, helpful, notional])
+
+    return pd.DataFrame(data, columns=[
+        "Timestamp","Base","Quote","Predicted_Rate","Live_Rate",
+        "Error","CorrectDecision","HelpfulOutcome","Notional"
+    ])
+
+# --- Demo button (auto-load synthetic sample and run) ---
 if st.button("Run Demo"):
     try:
-        sample_df = pd.read_csv("tests/sample_files/good.csv")
+        sample_df = generate_eur_usd_sample(100)
         st.session_state["_sample_df"] = sample_df
-        # trigger audit automatically
         run = True
-        st.info("Running demo with bundled sample CSV...")
+        st.info("Running demo with synthetic EUR/USD sample data...")
     except Exception as e:
         st.error(f"Failed to load demo sample: {e}")
-
 
 with st.sidebar:
     st.header("Options")
@@ -84,9 +100,9 @@ with col2:
     st.markdown("Quick actions")
     if st.button("Load sample CSV"):
         try:
-            sample_df = pd.read_csv("tests/sample_files/good.csv")
+            sample_df = generate_eur_usd_sample(50)
             st.session_state["_sample_df"] = sample_df
-            st.success("Sample CSV loaded (use Run audit to execute).")
+            st.success("Synthetic EUR/USD sample loaded (use Run audit to execute).")
         except Exception as e:
             st.error(f"Failed to load sample: {e}")
 
@@ -121,11 +137,6 @@ def _cached_fetch_rate(base: str, quote: str, use_yesterday_flag: bool):
     # --- Normal provider call ---
     return fetch_actual_rate(b, q, as_of_yesterday=use_yesterday_flag)
 
-from fpdf import FPDF
-import matplotlib.pyplot as plt
-import io, tempfile, os
-from datetime import datetime, timezone
-
 def build_pdf_report(base, quote, actual_rate, summary, audited):
     pdf = FPDF()
     pdf.add_page()
@@ -154,8 +165,6 @@ Coverage: {summary.get('percent_profiled')}
 
 Key Finding:
 {summary.get('key_finding', 'No key finding generated.')}
-
-
 """
     pdf.multi_cell(0, 10, exec_summary)
 
@@ -168,17 +177,12 @@ Key Finding:
         ax.set_ylabel("Rate")
         fig.tight_layout()
 
-        # Save chart to a temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
             fig.savefig(tmpfile.name, format="png")
             chart_path = tmpfile.name
 
         plt.close(fig)
-
-        # Embed into PDF
         pdf.image(chart_path, x=10, w=190)
-
-        # Clean up temp file
         os.remove(chart_path)
 
     pdf.ln(10)
@@ -187,8 +191,8 @@ Key Finding:
     pdf.set_font("Arial", "", 12)
     pdf.cell(200, 10, f"Generated: {datetime.now(timezone.utc).isoformat()}", ln=True)
 
-    # Return as bytes for Streamlit
     return pdf.output(dest="S").encode("latin-1")
+
 
 # more Friendly Schema Validator 
 
