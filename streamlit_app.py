@@ -118,9 +118,9 @@ if run:
                 if actual_rate is None:
                     _display_error(f"Rate provider returned no rate for {pair}.")
 
-            audited = evaluate_dataframe(df, actual_rate=actual_rate, fill_missing_only=True)
-            summary = compute_summary(audited, by_pair=True)
-            audit_success = True
+audited = evaluate_dataframe(df, actual_rate=actual_rate, fill_missing_only=True)
+ summary = compute_summary(audited, by_pair=True)
+ audit_success = True
     except RuntimeError:
         audit_success = False
     except Exception as e:
