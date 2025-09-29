@@ -16,9 +16,9 @@ from audit.summary import compute_summary
 from validators import infer_pair_from_df_or_filename
 from ingest.rate_fetcher import fetch_actual_rate
 
-ROOT = os.path.abspath(os.path.dirname(__file__))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "Fx-audit-Tool"))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
 st.set_page_config(page_title="Hedge Audit Demo", layout="wide")
 
