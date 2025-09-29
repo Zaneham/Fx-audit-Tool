@@ -273,7 +273,7 @@ if run:
             "Key Finding": "Model decisions aligned with actual market moves in most cases."
         })
         # --- Debug Panel (optional, collapsible) ---
-          with st.expander("🔧 Debug Info"):
+        with st.expander("🔧 Debug Info"):
                st.dataframe(audited[["Predicted_Rate", "Live_Rate"]].head(10))
                st.write((audited["Predicted_Rate"] - audited["Live_Rate"]).describe())
            # --- Key Metrics Table ---
