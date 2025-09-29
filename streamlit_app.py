@@ -186,14 +186,25 @@ if run:
     if not ok:
         _display_error(f"CSV missing required columns: {', '.join(missing)}")
 
-    # Normalize Timestamp column automatically
+       # Normalize Timestamp column automatically
     if "Timestamp" in df.columns:
-        df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce", dayfirst=True)
-        bad_rows = df["Timestamp"].isna().sum()
-        if bad_rows > 0:
-            st.warning(f"{bad_rows} rows were skipped due to unrecognized dates. Ensure your dates use YYYY-MM-DD.")
+    # Strip whitespace and enforce string type first
+    df["Timestamp"] = df["Timestamp"].astype(str).str.strip()
 
-            df = df.dropna(subset=["Timestamp"])
+    # Try parsing with a strict ISO format first
+    parsed = pd.to_datetime(df["Timestamp"], format="%Y-%m-%d", errors="coerce")
+
+    # Fallback: if strict parsing fails, try a more flexible parse
+    if parsed.isna().any():
+        parsed = pd.to_datetime(df["Timestamp"], errors="coerce", dayfirst=False)
+
+    df["Timestamp"] = parsed
+
+    # Count bad rows
+    bad_rows = df["Timestamp"].isna().sum()
+    if bad_rows > 0:
+        st.warning(f"{bad_rows} rows had invalid or unrecognized dates and were excluded.")
+        df = df.dropna(subset=["Timestamp"])
 
     # Parse actual rate or infer pair
     actual_rate = _parse_actual(actual_input)
