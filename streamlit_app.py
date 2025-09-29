@@ -43,7 +43,7 @@ Upload a CSV of hedge decisions and this tool will:
 - Validate the file structure
 - Fetch or use the actual FX rate
 - Compare predicted vs live rates
-- Generate accuracy metrics, charts, and a professional report
+- Generate accuracy metrics, charts, and a professional pdf report
 
 👉 If you just want to see it in action, click **Run Demo** below — no setup required.
 """
