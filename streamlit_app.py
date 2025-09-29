@@ -286,12 +286,19 @@ if run:
 
         # --- Visuals ---
         st.markdown("### 📈 Visuals")
+
         if "Predicted_Rate" in audited.columns and "Live_Rate" in audited.columns:
-            st.line_chart(audited[["Predicted_Rate", "Live_Rate"]])
+        audited = audited.copy()
+        audited["Day"] = range(1, len(audited) + 1)
+        chart_df = audited.set_index("Day")[["Predicted_Rate", "Live_Rate"]]
+        st.line_chart(chart_df)
+
         if "CorrectDecision" in audited.columns:
-            st.bar_chart(audited["CorrectDecision"].value_counts())
+        st.bar_chart(audited["CorrectDecision"].value_counts())
+
         if "HelpfulOutcome" in audited.columns:
-            st.bar_chart(audited["HelpfulOutcome"].value_counts())
+        st.bar_chart(audited["HelpfulOutcome"].value_counts())
+
 
         # --- Rolling Accuracy ---
         st.markdown("### 📈 Rolling Accuracy (7-day window)")
