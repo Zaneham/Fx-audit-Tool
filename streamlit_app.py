@@ -394,7 +394,7 @@ if run:
                   .astype(int)
             )
             df_acc["RollingAccuracy"] = (
-                df_acc["CorrectDecision"].
+                df_acc["CorrectDecision"].)
 
       
            # --- Key Metrics Table ---
