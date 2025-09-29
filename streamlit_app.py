@@ -21,6 +21,7 @@ from validators import infer_pair_from_df_or_filename, validate_schema
 from audit.evaluator import evaluate_dataframe
 from audit.summary import compute_summary
 from ingest.rate_fetcher import fetch_actual_rate
+from fpdf import FPDF
 
 st.set_page_config(page_title="Hedge Audit Demo", layout="wide")
 st.title("Hedge Audit Demo")
@@ -73,6 +74,38 @@ def _cached_fetch_rate(base: str, quote: str, use_yesterday_flag: bool):
     b = (base or "").upper().strip()
     q = (quote or "").upper().strip()
     return fetch_actual_rate(b, q, as_of_yesterday=use_yesterday_flag)
+
+# --- PDF Report Builder ---
+def build_pdf_report(base, quote, actual_rate, summary, audited):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(200, 10, "Hedge Audit Report", ln=True, align="C")
+
+    pdf.set_font("Arial", "", 12)
+    pdf.ln(10)
+    pdf.cell(200, 10, f"Currency Pair: {base}/{quote}", ln=True)
+    pdf.cell(200, 10, f"Rate Used: {actual_rate}", ln=True)
+    pdf.cell(200, 10, f"Rows Audited: {len(audited)}", ln=True)
+
+    pdf.ln(10)
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(200, 10, "Executive Summary", ln=True)
+    pdf.set_font("Arial", "", 12)
+    pdf.multi_cell(0, 10, f"""
+Prediction Accuracy: {summary.get('prediction_accuracy')}
+RMSE: {summary.get('rmse')}
+Recall %: {summary.get('recall_perc')}
+Coverage: {summary.get('percent_profiled')}
+""")
+
+    pdf.ln(10)
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(200, 10, "Appendix", ln=True)
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(200, 10, f"Generated: {datetime.now(timezone.utc).isoformat()}", ln=True)
+
+    return pdf.output(dest="S").encode("latin-1")
 
 # Main audit logic
 if run:
@@ -145,68 +178,72 @@ if run:
         raise
 
     # Display results
-
     if audit_success:
-      st.success("Audit complete")
+        st.success("Audit complete")
 
-      # --- Cover / Header ---
-      st.markdown("## 📑 Hedge Audit Report")
-      st.markdown(f"**Currency Pair:** {base}/{quote}")
-      st.markdown(f"**Audit Date:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z')}")
-      st.markdown(f"**Rows Audited:** {len(audited)}")
-      st.markdown(f"**Rate Used:** {actual_rate}")
+        # --- Cover / Header ---
+        st.markdown("## 📑 Hedge Audit Report")
+        st.markdown(f"**Currency Pair:** {base}/{quote}")
+        st.markdown(f"**Audit Date:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        st.markdown(f"**Rows Audited:** {len(audited)}")
+        st.markdown(f"**Rate Used:** {actual_rate}")
 
-      st.markdown("---")
+        st.markdown("---")
 
-      # --- Executive Summary ---
-      st.markdown("### 📝 Executive Summary")
-      st.write({
-          "Prediction Accuracy": summary.get("prediction_accuracy"),
-          "RMSE": summary.get("rmse"),
-          "Recall %": summary.get("recall_perc"),
-          "Coverage": summary.get("percent_profiled"),
-          "Key Finding": "Model decisions aligned with actual market moves in most cases."
-      })
+        # --- Executive Summary ---
+        st.markdown("### 📝 Executive Summary")
+        st.write({
+            "Prediction Accuracy": summary.get("prediction_accuracy"),
+            "RMSE": summary.get("rmse"),
+            "Recall %": summary.get("recall_perc"),
+            "Coverage": summary.get("percent_profiled"),
+            "Key Finding": "Model decisions aligned with actual market moves in most cases."
+        })
 
-      # --- Key Metrics Table ---
-      st.markdown("### 📊 Key Metrics")
-      metrics_table = {
-          "Prediction Accuracy": [summary.get("prediction_accuracy")],
-          "RMSE": [summary.get("rmse")],
-          "Recall %": [summary.get("recall_perc")],
-          "% Missing Actuals": [summary.get("percent_missing_actual")],
-          "% Profiled": [summary.get("percent_profiled")]
-      }
-      st.table(pd.DataFrame(metrics_table))
+        # --- Key Metrics Table ---
+        st.markdown("### 📊 Key Metrics")
+        metrics_table = {
+            "Prediction Accuracy": [summary.get("prediction_accuracy")],
+            "RMSE": [summary.get("rmse")],
+            "Recall %": [summary.get("recall_perc")],
+            "% Missing Actuals": [summary.get("percent_missing_actual")],
+            "% Profiled": [summary.get("percent_profiled")]
+        }
+        st.table(pd.DataFrame(metrics_table))
 
-      # --- Visuals ---
-      st.markdown("### 📈 Visuals")
-      if "Predicted_Rate" in audited.columns and "Live_Rate" in audited.columns:
-          st.line_chart(audited[["Predicted_Rate", "Live_Rate"]])
-      if "CorrectDecision" in audited.columns:
-          st.bar_chart(audited["CorrectDecision"].value_counts())
-      if "HelpfulOutcome" in audited.columns:
-          st.bar_chart(audited["HelpfulOutcome"].value_counts())
+               # --- Visuals ---
+        st.markdown("### 📈 Visuals")
+        if "Predicted_Rate" in audited.columns and "Live_Rate" in audited.columns:
+            st.line_chart(audited[["Predicted_Rate", "Live_Rate"]])
+        if "CorrectDecision" in audited.columns:
+            st.bar_chart(audited["CorrectDecision"].value_counts())
+        if "HelpfulOutcome" in audited.columns:
+            st.bar_chart(audited["HelpfulOutcome"].value_counts())
 
-      # --- Detailed Findings ---
-      st.markdown("### 🔍 Detailed Findings")
-      if "Error" in audited.columns:
-          top_errors = audited.nlargest(5, "Error")
-          st.write("Top 5 largest prediction errors:")
-          st.dataframe(top_errors)
+        # --- Detailed Findings ---
+        st.markdown("### 🔍 Detailed Findings")
+        if "Error" in audited.columns:
+            top_errors = audited.nlargest(5, "Error")
+            st.write("Top 5 largest prediction errors:")
+            st.dataframe(top_errors)
 
-      # --- Data Preview ---
-      st.markdown("### 📂 Data Preview")
-      st.dataframe(audited.head(show_preview_rows))
+        # --- Data Preview ---
+        st.markdown("### 📂 Data Preview")
+        st.dataframe(audited.head(show_preview_rows))
 
-      # --- Download ---
-      csv_bytes = audited.to_csv(index=False).encode("utf-8")
-      st.download_button("Download audited CSV", data=csv_bytes,
-                         file_name="audited.csv", mime="text/csv")
+        # --- Download CSV ---
+        csv_bytes = audited.to_csv(index=False).encode("utf-8")
+        st.download_button("Download audited CSV", data=csv_bytes,
+                           file_name="audited.csv", mime="text/csv")
 
-      # --- Appendix ---
-      st.markdown("---")
-      st.markdown("### 📎 Appendix")
-      st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · "
-                 f"Generated: {datetime.now(timezone.utc).isoformat()}Z")
-      st.caption(f"Options → Infer Pair: {infer_pair}, Use Yesterday: {use_yesterday}")
+        # --- Download PDF Report ---
+        pdf_bytes = build_pdf_report(base, quote, actual_rate, summary, audited)
+        st.download_button("Download PDF Report", data=pdf_bytes,
+                           file_name="hedge_audit_report.pdf", mime="application/pdf")
+
+        # --- Appendix ---
+        st.markdown("---")
+        st.markdown("### 📎 Appendix")
+        st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · "
+                   f"Generated: {datetime.now(timezone.utc).isoformat()}Z")
+        st.caption(f"Options → Infer Pair: {infer_pair}, Use Yesterday: {use_yesterday}")
