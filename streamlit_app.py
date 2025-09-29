@@ -106,6 +106,19 @@ def _display_error(msg: str):
 def _cached_fetch_rate(base: str, quote: str, use_yesterday_flag: bool):
     b = (base or "").upper().strip()
     q = (quote or "").upper().strip()
+
+    # --- Currency validation guardrail ---
+    SUPPORTED = {
+        "USD","EUR","GBP","JPY","AUD","NZD","CAD","CHF",
+        "SEK","NOK","CNY","HKD","SGD"  # extend as needed
+    }
+    if b not in SUPPORTED or q not in SUPPORTED:
+        _display_error(
+            f"Unsupported currency pair: {b}/{q}. "
+            f"Please use valid ISO codes like EUR/USD."
+        )
+
+    # --- Normal provider call ---
     return fetch_actual_rate(b, q, as_of_yesterday=use_yesterday_flag)
 
 from fpdf import FPDF
