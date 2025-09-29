@@ -323,5 +323,5 @@ if run:
         st.markdown("### 📎 Appendix")
         st.caption(f"Rate used: {actual_rate} · Rows: {len(audited)} · "
                    f"Generated: {datetime.now(timezone.utc).isoformat()}Z")
-        st.caption(f"Options → Infer Pair: {infer_pair}, Use Yesterday: {use_yesterday}"
-st.caption(f"Options → Infer Pair: {infer_pair}, Use Yesterday: {use_yesterday}")
+        st.caption(f"Options → Infer Pair: {infer_pair}, Use Yesterday: {use_yesterday}")
+        st.caption(f"Options → Infer Pair: {infer_pair}, Use Yesterday: {use_yesterday}")
