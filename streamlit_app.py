@@ -46,8 +46,8 @@ Upload a CSV of hedge decisions and this tool will:
 """
 )
 st.markdown(
-    ">  **Disclaimer:** This demo uses synthetic, randomly generated data for illustration only. "
-    "It is not based on real financial markets. However the program will still work with real CSV files"
+    ">  **Disclaimer:** The demo button uses synthetic, randomly generated data for illustration only. "
+    " As you can see it is not based on real financial markets. However the program will still work with real CSV files"
 )
 
 # --- Synthetic demo data generator ---
